@@ -1,0 +1,42 @@
+TRABAJO FINAL PROGRAMACION ANALITICA
+
+Leer el documento donde se especifica el trabajo a realizar
+
+Este es el resumen del dataset
+
+* TIPO DE PROBLEMA: CLASIFICACION
+
+* DESCRIPCION:
+Los pacientes con enfermedad hepática han aumentado continuamente debido al 
+consumo excesivo de alcohol, la inhalación de gases nocivos, la ingesta de 
+alimentos contaminados, los encurtidos y las drogas. 
+
+Este conjunto de datos contiene 416 registros de pacientes hepáticos y 167 
+registros de pacientes no hepáticos recopilados del noreste de Andhra Pradesh,
+ India. La columna "Dataset" es una etiqueta de clase utilizada para dividir
+ grupos en pacientes hepáticos (enfermedad hepática) o no (sin enfermedad). 
+Este conjunto de datos contiene 441 registros de pacientes masculinos y 142 
+registros de pacientes femeninos.
+
+Cualquier paciente cuya edad excedió 89 se enumera como la edad "90".
+
+La idea es usar estos registros de pacientes para determinar qué pacientes tienen 
+enfermedad hepática y cuáles no.
+
+* DATOS:
+
+Age of the patient
+Gender of the patient
+Total Bilirubin
+Direct Bilirubin
+Alkaline Phosphotase
+Alamine Aminotransferase
+Aspartate Aminotransferase
+Total Protiens
+Albumin
+Albumin and Globulin Ratio
+
+* DATOS DE SALIDA:
+
+Dataset- field used to split the data into two sets 
+(patient with liver disease, or no disease)
