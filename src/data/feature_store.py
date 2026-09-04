@@ -173,7 +173,7 @@ def get_hopsworks_project(
     except ImportError as exc:
         msg = (
             "El paquete 'hopsworks' no está instalado en el entorno. "
-            "Por favor instálelo con 'pip install hopsworks' o use el devcontainer configurado."
+            "Instálelo con 'uv add hopsworks --group dev' (o ejecute 'make install_feature_store_libs')."
         )
         logger.exception(msg)
         raise ImportError(msg) from exc
