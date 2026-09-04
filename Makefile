@@ -25,6 +25,10 @@ install_data_libs: ## Install pandas, scikit-learn, Jupyter, seaborn
 	@echo "🚀 Installing Jupyter, matplotlib and seaborn in dev..."
 	uv add jupyter matplotlib seaborn --group dev
 
+install_feature_store_libs: ## Install hopsworks SDK for feature store backfill
+	@echo "🚀 Installing hopsworks SDK..."
+	uv pip install hopsworks
+
 
 ####----Tests----####
 test: ## Test the code with pytest and coverage

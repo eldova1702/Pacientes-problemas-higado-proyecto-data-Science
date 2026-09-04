@@ -3,7 +3,7 @@ name = "template-data-science-container"
 version = "0.1.0"
 description = "Template for data science and AI Projects with the last stable version of python and devcontainer"
 authors = [
-    "Jose R. Zapata <joserzapata.github.io>",
+    {name = "Jose R. Zapata", email = "joserzapata@gmail.com"},
 ]
 requires-python = ">=3.12"
 readme = "README.md"
@@ -14,6 +14,7 @@ dependencies = [
     "matplotlib>=3.11.1",
     "pandas>=3.0.5",
     "pyarrow>=25.0.1",
+    "python-dotenv>=1.0.0",
     "scikit-learn>=1.9.0",
     "scipy>=1.18.0",
     "seaborn>=0.13.2",
@@ -27,11 +28,13 @@ repository = "https://github.com//template-data-science-container"
 
 [dependency-groups]
 dev = [
+    "cruft[pyproject]>=2.16.0", # Automated Cookiecutter template synchronization
+    "mypy>=1.14.0",
     "pre-commit>=4.6.1", # Code linting and formatting
     "pytest>=9.1.1", # Testing framework
     "pytest-cookies>=0.7.0",
     "pytest-cov>=7.1.0",
-    "cruft[pyproject]>=2.16.0",# Automated Cookiecutter template synchronization
+    "ruff>=0.9.0",
 ]
 
 #
