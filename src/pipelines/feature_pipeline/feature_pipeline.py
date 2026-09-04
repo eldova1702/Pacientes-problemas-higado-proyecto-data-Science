@@ -36,6 +36,10 @@ from src.data.feature_store import (  # noqa: E402
     get_hopsworks_project,
     get_or_create_patient_feature_group,
 )
+from src.data.validation import (  # noqa: E402
+    DataValidationError,
+    validate_patient_features,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -326,6 +330,7 @@ def run_feature_pipeline(  # noqa: PLR0913
     version: int = DEFAULT_FEATURE_GROUP_VERSION,
     *,
     start_id: int | None = None,
+    skip_validation: bool = False,
     dry_run: bool = False,
     wait_for_job: bool = True,
     api_key: str | None = None,
@@ -338,13 +343,17 @@ def run_feature_pipeline(  # noqa: PLR0913
         fg_name: Nombre del Feature Group en Hopsworks.
         version: Versión del Feature Group (por defecto: 3).
         start_id: Identificador inicial para patient_id si no existe en los datos.
-        dry_run: Si es True, solo extrae y transforma los datos sin conectar a Hopsworks.
+        skip_validation: Si es True, omite el paso de validación con Pandera.
+        dry_run: Si es True, solo extrae, transforma y valida sin conectar a Hopsworks.
         wait_for_job: Si es True, espera a que finalice el job de inserción.
         api_key: Llave API de Hopsworks (opcional).
         project_name: Nombre del proyecto Hopsworks (opcional).
 
     Returns:
         Diccionario con el resultado de la ejecución.
+
+    Raises:
+        DataValidationError: Si los datos procesados no cumplen con las reglas clínicas.
     """
     logger.info("=== Iniciando Feature Pipeline ===")
     df_raw = extract_data(data_path=data_path)
@@ -375,6 +384,14 @@ def run_feature_pipeline(  # noqa: PLR0913
         f"Transformación finalizada: {df_features.shape[0]} filas, {df_features.shape[1]} columnas."
     )
     logger.info(f"Columnas resultantes: {list(df_features.columns)}")
+
+    # Validación de Calidad de Datos con Pandera
+    if not skip_validation:
+        logger.info("Ejecutando validación de calidad y consistencia de datos con Pandera...")
+        df_features = validate_patient_features(df_features)
+        logger.info("Validación exitosa: Todas las reglas clínicas del esquema fueron aprobadas.")
+    else:
+        logger.warning("Validación de datos omitida (--skip-validation activo).")
 
     if dry_run:
         logger.info("Modo --dry-run activado: Omitiendo carga en Feature Store remoto.")
@@ -426,9 +443,14 @@ def main() -> int:
         help="ID inicial para patient_id si no existe en los datos (por defecto: consulta Feature Store o 1).",
     )
     parser.add_argument(
+        "--skip-validation",
+        action="store_true",
+        help="Omite el paso de validación de calidad de datos con Pandera (por defecto: validación activa).",
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Ejecuta solo la extracción y transformación sin conectar a Hopsworks.",
+        help="Ejecuta solo la extracción, transformación y validación sin conectar a Hopsworks.",
     )
     parser.add_argument(
         "--wait",
@@ -445,10 +467,14 @@ def main() -> int:
             fg_name=args.fg_name,
             version=args.version,
             start_id=args.start_id,
+            skip_validation=args.skip_validation,
             dry_run=args.dry_run,
             wait_for_job=args.wait,
         )
         logger.info(f"Feature Pipeline finalizado exitosamente: {result}")
+    except DataValidationError:
+        logger.exception("Fallo de validación de datos en el pipeline.")
+        return 1
     except Exception:
         logger.exception("Error durante la ejecución del Feature Pipeline.")
         return 1

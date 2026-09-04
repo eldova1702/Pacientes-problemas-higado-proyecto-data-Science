@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.data.validation import DataValidationError
 from src.pipelines.feature_pipeline.feature_pipeline import (
     DEFAULT_FEATURE_GROUP_VERSION,
     extract_data,
@@ -441,3 +442,49 @@ def test_main_module_execution(tmp_path: Path, sample_clinical_data: pd.DataFram
     with patch("sys.argv", test_args), pytest.raises(SystemExit) as exc_info:
         runpy.run_module("src.pipelines.feature_pipeline", run_name="__main__")
     assert exc_info.value.code == 0
+
+
+def test_run_feature_pipeline_validation_failure_halts_load(
+    tmp_path: Path, sample_clinical_data: pd.DataFrame
+) -> None:
+    """Verifica que si la validación falla, se lance DataValidationError y no se intente cargar."""
+    corrupted_data = sample_clinical_data.copy()
+    corrupted_data.loc[0, "Age"] = -50.0  # Falla regla clínica de edad
+    parquet_path = tmp_path / "bad_patients.parquet"
+    corrupted_data.to_parquet(parquet_path)
+
+    with (
+        patch(
+            "src.pipelines.feature_pipeline.feature_pipeline.load_features_to_store"
+        ) as mock_load,
+        pytest.raises(DataValidationError, match="Los datos no cumplen con las reglas de calidad"),
+    ):
+        run_feature_pipeline(data_path=parquet_path, dry_run=False)
+
+    mock_load.assert_not_called()
+
+
+def test_run_feature_pipeline_skip_validation(
+    tmp_path: Path, sample_clinical_data: pd.DataFrame
+) -> None:
+    """Verifica que con skip_validation=True se omita la validación incluso con datos fuera de rango."""
+    corrupted_data = sample_clinical_data.copy()
+    corrupted_data.loc[0, "Age"] = -50.0
+    parquet_path = tmp_path / "skipped_patients.parquet"
+    corrupted_data.to_parquet(parquet_path)
+
+    result = run_feature_pipeline(data_path=parquet_path, skip_validation=True, dry_run=True)
+    assert result["status"] == "dry_run_success"
+
+
+def test_main_cli_validation_failure(tmp_path: Path, sample_clinical_data: pd.DataFrame) -> None:
+    """Verifica que el CLI capture DataValidationError y retorne código de salida 1."""
+    corrupted_data = sample_clinical_data.copy()
+    corrupted_data.loc[0, "Age"] = -999.0
+    csv_path = tmp_path / "cli_bad_patients.csv"
+    corrupted_data.to_csv(csv_path, index=False)
+
+    test_args = ["feature_pipeline.py", "--data-path", str(csv_path), "--dry-run"]
+    with patch("sys.argv", test_args):
+        exit_code = main()
+        assert exit_code == 1
