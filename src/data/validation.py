@@ -196,6 +196,7 @@ def get_patient_features_schema(max_null_fraction: float = 0.05) -> pa.DataFrame
                 float,
                 checks=[
                     pa.Check.ge(0.0),
+                    null_check,
                 ],
                 nullable=True,
                 coerce=True,
@@ -205,6 +206,7 @@ def get_patient_features_schema(max_null_fraction: float = 0.05) -> pa.DataFrame
                 float,
                 checks=[
                     pa.Check.ge(0.0),
+                    null_check,
                 ],
                 nullable=True,
                 coerce=True,
