@@ -12,7 +12,9 @@ import pandas as pd
 import pytest
 
 from src.pipelines.feature_pipeline.feature_pipeline import (
+    DEFAULT_FEATURE_GROUP_VERSION,
     extract_data,
+    get_next_patient_id,
     load_features_to_store,
     main,
     run_feature_pipeline,
@@ -255,9 +257,41 @@ def test_transform_features_preserves_existing_keys(sample_clinical_data: pd.Dat
     assert transformed["event_time"].iloc[0] == existing_ts
 
 
+def test_transform_features_naive_timestamp_normalized_to_utc(
+    sample_clinical_data: pd.DataFrame,
+) -> None:
+    """Verifica que marcas temporales sin zona horaria (naive) se normalicen siempre a UTC."""
+    naive_ts = datetime.datetime(2026, 9, 1, 10, 0, 0)
+    transformed = transform_features(sample_clinical_data, base_timestamp=naive_ts)
+
+    assert str(transformed["event_time"].dt.tz) == "UTC"
+    assert transformed["event_time"].iloc[0] == pd.Timestamp("2026-09-01 10:00:00+00:00")
+
+
 # ==============================================================================
 # Tests de Carga en Feature Store (load_features_to_store)
 # ==============================================================================
+
+
+def test_get_next_patient_id_with_existing_records() -> None:
+    """Verifica que get_next_patient_id devuelva max(patient_id) + 1."""
+    mock_fs = MagicMock()
+    mock_fg = MagicMock()
+    mock_fs.get_feature_group.return_value = mock_fg
+    mock_fg.select.return_value.read.return_value = pd.DataFrame({"patient_id": [1, 5, 42]})
+
+    expected_next_id = 43
+    next_id = get_next_patient_id(mock_fs, fg_name="pacientes_higado_fg", version=3)
+    assert next_id == expected_next_id
+
+
+def test_get_next_patient_id_empty_or_error() -> None:
+    """Verifica fallback a 1 si el Feature Group no existe o falla la consulta."""
+    mock_fs = MagicMock()
+    mock_fs.get_feature_group.side_effect = RuntimeError("Feature Group no encontrado")
+
+    next_id = get_next_patient_id(mock_fs, fg_name="pacientes_higado_fg", version=3)
+    assert next_id == 1
 
 
 def test_load_features_to_store_flow(sample_clinical_data: pd.DataFrame) -> None:
@@ -279,7 +313,7 @@ def test_load_features_to_store_flow(sample_clinical_data: pd.DataFrame) -> None
         result = load_features_to_store(
             df=transformed,
             fg_name="pacientes_higado_fg",
-            version=2,
+            version=DEFAULT_FEATURE_GROUP_VERSION,
             api_key="test_api_key",
             project_name="test_project",
             wait_for_job=True,
@@ -288,11 +322,10 @@ def test_load_features_to_store_flow(sample_clinical_data: pd.DataFrame) -> None
         mock_login.assert_called_once_with(api_key="test_api_key", project_name="test_project")
         mock_fg.insert.assert_called_once_with(transformed, write_options={"wait_for_job": True})
         expected_records = len(sample_clinical_data)
-        expected_version = 2
         assert result["status"] == "success"
         assert result["records_inserted"] == expected_records
         assert result["feature_group_name"] == "pacientes_higado_fg"
-        assert result["version"] == expected_version
+        assert result["version"] == DEFAULT_FEATURE_GROUP_VERSION
         assert result["metadata_warnings"] == []
 
 
@@ -347,6 +380,37 @@ def test_run_feature_pipeline_full_flow(tmp_path: Path, sample_clinical_data: pd
     ) as mock_load:
         result = run_feature_pipeline(data_path=parquet_path, dry_run=False)
         mock_load.assert_called_once()
+        assert result["status"] == "success"
+
+
+def test_run_feature_pipeline_with_auto_start_id(
+    tmp_path: Path, sample_clinical_data: pd.DataFrame
+) -> None:
+    """Verifica que run_feature_pipeline consulte get_next_patient_id en ejecución remota."""
+    parquet_path = tmp_path / "patients.parquet"
+    sample_clinical_data.to_parquet(parquet_path)
+
+    mock_project = MagicMock()
+    mock_fs = MagicMock()
+    mock_project.get_feature_store.return_value = mock_fs
+
+    expected_records = len(sample_clinical_data)
+    with (
+        patch(
+            "src.pipelines.feature_pipeline.feature_pipeline.get_hopsworks_project",
+            return_value=mock_project,
+        ),
+        patch(
+            "src.pipelines.feature_pipeline.feature_pipeline.get_next_patient_id",
+            return_value=101,
+        ) as mock_get_id,
+        patch(
+            "src.pipelines.feature_pipeline.feature_pipeline.load_features_to_store",
+            return_value={"status": "success", "records_inserted": expected_records},
+        ),
+    ):
+        result = run_feature_pipeline(data_path=parquet_path, dry_run=False)
+        mock_get_id.assert_called_once()
         assert result["status"] == "success"
 
 

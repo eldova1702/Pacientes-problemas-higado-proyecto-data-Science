@@ -44,6 +44,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("feature_pipeline")
 
+DEFAULT_FEATURE_GROUP_NAME = "pacientes_higado_fg"
+DEFAULT_FEATURE_GROUP_VERSION = 3
+
 INTERMEDIATE_DATA_PATH = (
     PROJECT_ROOT / "data" / "02_intermediate" / "pacientes_higado_exploracion.parquet"
 )
@@ -151,12 +154,12 @@ def transform_features(
         df_transformed["patient_id"] = range(start_id, start_id + len(df_transformed))
     df_transformed["patient_id"] = df_transformed["patient_id"].astype("int64")
 
-    # Marca temporal de evento en UTC
+    # Marca temporal de evento en UTC garantizada
     if "event_time" not in df_transformed.columns:
         ts = base_timestamp if base_timestamp is not None else DEFAULT_HISTORICAL_TIMESTAMP
-        df_transformed["event_time"] = pd.to_datetime(ts)
+        df_transformed["event_time"] = pd.to_datetime(ts, utc=True)
     else:
-        df_transformed["event_time"] = pd.to_datetime(df_transformed["event_time"])
+        df_transformed["event_time"] = pd.to_datetime(df_transformed["event_time"], utc=True)
 
     # Normalizar género como string o None si es nulo
     if "gender" in df_transformed.columns:
@@ -214,10 +217,45 @@ def transform_features(
     return df_transformed
 
 
+def get_next_patient_id(
+    fs: Any,
+    fg_name: str = DEFAULT_FEATURE_GROUP_NAME,
+    version: int = DEFAULT_FEATURE_GROUP_VERSION,
+) -> int:
+    """Consulta el Feature Store para obtener el siguiente identificador de paciente disponible.
+
+    Evita colisiones de clave primaria cuando se agregan nuevos lotes de pacientes.
+
+    Args:
+        fs: Instancia del Feature Store de Hopsworks.
+        fg_name: Nombre del Feature Group.
+        version: Versión del Feature Group.
+
+    Returns:
+        Próximo ID entero disponible (max(patient_id) + 1, o 1 si está vacío o no existe).
+    """
+    try:
+        fg = fs.get_feature_group(name=fg_name, version=version)
+        fg_df = fg.select(["patient_id"]).read()
+        if fg_df is not None and not fg_df.empty and "patient_id" in fg_df.columns:
+            max_id = int(fg_df["patient_id"].max())
+            next_id = max_id + 1
+            logger.info(
+                f"Último patient_id en '{fg_name}' v{version}: {max_id}. Nuevo inicio: {next_id}"
+            )
+            return next_id
+    except Exception as exc:
+        logger.debug(
+            f"No se pudo consultar el último patient_id en '{fg_name}' v{version} "
+            f"(posiblemente nuevo o vacío): {exc}"
+        )
+    return 1
+
+
 def load_features_to_store(  # noqa: PLR0913
     df: pd.DataFrame,
-    fg_name: str = "pacientes_higado_fg",
-    version: int = 2,
+    fg_name: str = DEFAULT_FEATURE_GROUP_NAME,
+    version: int = DEFAULT_FEATURE_GROUP_VERSION,
     *,
     api_key: str | None = None,
     project_name: str | None = None,
@@ -229,7 +267,7 @@ def load_features_to_store(  # noqa: PLR0913
     Args:
         df: DataFrame con características procesadas para almacenar.
         fg_name: Nombre del Feature Group de destino.
-        version: Versión del Feature Group.
+        version: Versión del Feature Group (por defecto: 3 para características derivadas).
         api_key: Llave API de Hopsworks (opcional).
         project_name: Nombre del proyecto en Hopsworks (opcional).
         time_travel_format: Formato temporal ('HUDI' o 'DELTA').
@@ -284,9 +322,10 @@ def load_features_to_store(  # noqa: PLR0913
 
 def run_feature_pipeline(  # noqa: PLR0913
     data_path: Path | None = None,
-    fg_name: str = "pacientes_higado_fg",
-    version: int = 2,
+    fg_name: str = DEFAULT_FEATURE_GROUP_NAME,
+    version: int = DEFAULT_FEATURE_GROUP_VERSION,
     *,
+    start_id: int | None = None,
     dry_run: bool = False,
     wait_for_job: bool = True,
     api_key: str | None = None,
@@ -297,7 +336,8 @@ def run_feature_pipeline(  # noqa: PLR0913
     Args:
         data_path: Ruta al archivo de datos de entrada (opcional).
         fg_name: Nombre del Feature Group en Hopsworks.
-        version: Versión del Feature Group.
+        version: Versión del Feature Group (por defecto: 3).
+        start_id: Identificador inicial para patient_id si no existe en los datos.
         dry_run: Si es True, solo extrae y transforma los datos sin conectar a Hopsworks.
         wait_for_job: Si es True, espera a que finalice el job de inserción.
         api_key: Llave API de Hopsworks (opcional).
@@ -310,8 +350,27 @@ def run_feature_pipeline(  # noqa: PLR0913
     df_raw = extract_data(data_path=data_path)
     logger.info(f"Datos extraídos: {df_raw.shape[0]} filas, {df_raw.shape[1]} columnas.")
 
+    # Resolver patient_id inicial para evitar colisiones si no viene en los datos
+    resolved_start_id = 1
+    if "patient_id" not in df_raw.columns:
+        if start_id is not None:
+            resolved_start_id = start_id
+        elif dry_run:
+            resolved_start_id = 1
+        else:
+            try:
+                project = get_hopsworks_project(api_key=api_key, project_name=project_name)
+                fs = project.get_feature_store()
+                resolved_start_id = get_next_patient_id(fs=fs, fg_name=fg_name, version=version)
+            except Exception as exc:
+                logger.warning(
+                    f"No se pudo consultar el último patient_id desde Hopsworks: {exc}. "
+                    "Iniciando con patient_id=1 por defecto."
+                )
+                resolved_start_id = 1
+
     logger.info("Transformando datos y calculando características clínicas...")
-    df_features = transform_features(df_raw)
+    df_features = transform_features(df_raw, start_id=resolved_start_id)
     logger.info(
         f"Transformación finalizada: {df_features.shape[0]} filas, {df_features.shape[1]} columnas."
     )
@@ -351,14 +410,20 @@ def main() -> int:
     parser.add_argument(
         "--fg-name",
         type=str,
-        default="pacientes_higado_fg",
+        default=DEFAULT_FEATURE_GROUP_NAME,
         help="Nombre del Feature Group en Hopsworks.",
     )
     parser.add_argument(
         "--version",
         type=int,
-        default=2,
-        help="Versión del Feature Group (por defecto: 2).",
+        default=DEFAULT_FEATURE_GROUP_VERSION,
+        help="Versión del Feature Group (por defecto: 3 para características derivadas).",
+    )
+    parser.add_argument(
+        "--start-id",
+        type=int,
+        default=None,
+        help="ID inicial para patient_id si no existe en los datos (por defecto: consulta Feature Store o 1).",
     )
     parser.add_argument(
         "--dry-run",
@@ -379,6 +444,7 @@ def main() -> int:
             data_path=args.data_path,
             fg_name=args.fg_name,
             version=args.version,
+            start_id=args.start_id,
             dry_run=args.dry_run,
             wait_for_job=args.wait,
         )

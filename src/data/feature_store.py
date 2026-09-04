@@ -107,7 +107,7 @@ def prepare_patient_features_for_feature_store(
     # Generar marca temporal de evento determinista si no existe
     if "event_time" not in df_prepared.columns:
         ts = base_timestamp if base_timestamp is not None else DEFAULT_HISTORICAL_TIMESTAMP
-        df_prepared["event_time"] = pd.to_datetime(ts)
+        df_prepared["event_time"] = pd.to_datetime(ts, utc=True)
 
     # Convertir tipos de datos
     if "gender" in df_prepared.columns:
