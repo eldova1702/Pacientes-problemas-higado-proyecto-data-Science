@@ -50,6 +50,8 @@ FEATURE_DESCRIPTIONS: dict[str, str] = {
     "albumin": "Nivel de albúmina en suero",
     "albumin_and_globulin_ratio": "Razón albúmina/globulina (A/G ratio)",
     "diagnosis": "Diagnóstico de enfermedad hepática (1: enfermo, 2: sano)",
+    "direct_to_total_bilirubin": "Razón de bilirrubina directa sobre bilirrubina total",
+    "ast_to_alt": "Razón AST/ALT (Cociente De Ritis) para evaluación hepática",
     "event_time": "Marca temporal del evento o fecha de ingestión para el Feature Store",
 }
 
