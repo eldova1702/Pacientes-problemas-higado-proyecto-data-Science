@@ -55,11 +55,19 @@ def load_dataset(data_path: Path | None = None) -> pd.DataFrame:
     Returns:
         DataFrame cargado con las columnas clínicas.
     """
-    if data_path is not None and data_path.exists():
+    if data_path is not None:
+        if not data_path.exists():
+            msg = f"La ruta de datos especificada no existe: {data_path}"
+            logger.error(msg)
+            raise FileNotFoundError(msg)
         logger.info(f"Cargando datos desde ruta especificada: {data_path}")
         if data_path.suffix == ".parquet":
             return pd.read_parquet(data_path)
-        return pd.read_csv(data_path)
+        df_csv = pd.read_csv(data_path)
+        if "Dataset" in df_csv.columns:
+            valid_cols = [c for c in VALID_RAW_COLUMNS if c in df_csv.columns]
+            df_csv = df_csv[valid_cols].rename(columns={"Dataset": "Diagnosis"})
+        return df_csv
 
     if INTERMEDIATE_DATA_PATH.exists():
         logger.info(f"Cargando datos intermedios desde {INTERMEDIATE_DATA_PATH}")
@@ -97,8 +105,8 @@ def main() -> int:
     parser.add_argument(
         "--version",
         type=int,
-        default=1,
-        help="Versión del Feature Group.",
+        default=2,
+        help="Versión del Feature Group (por defecto: 2).",
     )
     parser.add_argument(
         "--dry-run",

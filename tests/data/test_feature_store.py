@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from src.data.feature_store import (
+    DEFAULT_HISTORICAL_TIMESTAMP,
     backfill_patient_features_to_store,
     get_hopsworks_project,
     get_or_create_patient_feature_group,
@@ -67,7 +68,7 @@ def test_prepare_patient_features_primary_key(sample_raw_dataframe: pd.DataFrame
 
 
 def test_prepare_patient_features_timestamp(sample_raw_dataframe: pd.DataFrame) -> None:
-    """Verifica la generación de la marca temporal event_time."""
+    """Verifica la generación de la marca temporal event_time con timestamp explícito."""
     fixed_time = datetime.datetime(2026, 8, 31, 12, 0, 0, tzinfo=datetime.UTC)
     prepared = prepare_patient_features_for_feature_store(
         sample_raw_dataframe, base_timestamp=fixed_time
@@ -76,6 +77,14 @@ def test_prepare_patient_features_timestamp(sample_raw_dataframe: pd.DataFrame) 
     assert "event_time" in prepared.columns
     assert len(prepared["event_time"].dropna()) == len(sample_raw_dataframe)
     assert prepared["event_time"].iloc[0] == fixed_time
+
+
+def test_prepare_patient_features_default_timestamp(sample_raw_dataframe: pd.DataFrame) -> None:
+    """Verifica que sin base_timestamp se use DEFAULT_HISTORICAL_TIMESTAMP de forma determinista."""
+    prepared = prepare_patient_features_for_feature_store(sample_raw_dataframe)
+
+    assert "event_time" in prepared.columns
+    assert prepared["event_time"].iloc[0] == DEFAULT_HISTORICAL_TIMESTAMP
 
 
 def test_prepare_patient_features_values(sample_raw_dataframe: pd.DataFrame) -> None:
@@ -135,13 +144,14 @@ def test_backfill_patient_features_to_store_flow(sample_raw_dataframe: pd.DataFr
     mock_project.get_feature_store.return_value = mock_fs
     mock_fs.get_or_create_feature_group.return_value = mock_fg
 
+    expected_version = 2
     with patch(
         "src.data.feature_store.get_hopsworks_project", return_value=mock_project
     ) as mock_login:
         result = backfill_patient_features_to_store(
             df=sample_raw_dataframe,
             feature_group_name="pacientes_higado_fg",
-            version=1,
+            version=expected_version,
             api_key="fake_key",
             project_name="test_project",
             wait_for_job=True,
@@ -152,3 +162,26 @@ def test_backfill_patient_features_to_store_flow(sample_raw_dataframe: pd.DataFr
         assert result["status"] == "success"
         assert result["records_inserted"] == len(sample_raw_dataframe)
         assert result["feature_group_name"] == "pacientes_higado_fg"
+        assert result["version"] == expected_version
+        assert result["metadata_warnings"] == []
+
+
+def test_backfill_patient_features_metadata_warning(sample_raw_dataframe: pd.DataFrame) -> None:
+    """Verifica que se capturen advertencias si alguna descripción no se puede actualizar."""
+    mock_project = MagicMock()
+    mock_fs = MagicMock()
+    mock_fg = MagicMock()
+    mock_fg.update_feature_description.side_effect = RuntimeError("Error de metadatos")
+
+    mock_project.get_feature_store.return_value = mock_fs
+    mock_fs.get_or_create_feature_group.return_value = mock_fg
+
+    with patch("src.data.feature_store.get_hopsworks_project", return_value=mock_project):
+        result = backfill_patient_features_to_store(
+            df=sample_raw_dataframe,
+            feature_group_name="pacientes_higado_fg",
+            version=2,
+            api_key="fake_key",
+            project_name="test_project",
+        )
+        assert len(result["metadata_warnings"]) > 0

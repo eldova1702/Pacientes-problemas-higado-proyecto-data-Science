@@ -54,6 +54,9 @@ FEATURE_DESCRIPTIONS: dict[str, str] = {
 }
 
 
+DEFAULT_HISTORICAL_TIMESTAMP: pd.Timestamp = pd.Timestamp("2026-08-31 00:00:00+00:00")
+
+
 def load_environment_variables(env_path: Path | str | None = None) -> None:
     """Carga las variables de entorno desde un archivo .env si existe."""
     if env_path is not None:
@@ -65,7 +68,7 @@ def load_environment_variables(env_path: Path | str | None = None) -> None:
 def prepare_patient_features_for_feature_store(
     df: pd.DataFrame,
     start_id: int = 1,
-    base_timestamp: datetime.datetime | None = None,
+    base_timestamp: datetime.datetime | pd.Timestamp | None = None,
 ) -> pd.DataFrame:
     """Prepara y estandariza el DataFrame de pacientes para el Feature Store.
 
@@ -78,7 +81,8 @@ def prepare_patient_features_for_feature_store(
     Args:
         df: DataFrame original o intermedio con las variables clínicas.
         start_id: Índice inicial para la clave primaria de pacientes.
-        base_timestamp: Marca de tiempo base para los eventos históricos.
+        base_timestamp: Marca de tiempo base para los eventos históricos (por defecto
+            usa DEFAULT_HISTORICAL_TIMESTAMP para garantizar reproducibilidad).
 
     Returns:
         DataFrame formateado y listo para inserción en el Feature Store.
@@ -98,9 +102,9 @@ def prepare_patient_features_for_feature_store(
     if "patient_id" not in df_prepared.columns:
         df_prepared["patient_id"] = range(start_id, start_id + len(df_prepared))
 
-    # Generar marca temporal de evento si no existe
+    # Generar marca temporal de evento determinista si no existe
     if "event_time" not in df_prepared.columns:
-        ts = base_timestamp if base_timestamp is not None else datetime.datetime.now(datetime.UTC)
+        ts = base_timestamp if base_timestamp is not None else DEFAULT_HISTORICAL_TIMESTAMP
         df_prepared["event_time"] = pd.to_datetime(ts)
 
     # Convertir tipos de datos
@@ -213,7 +217,7 @@ def get_hopsworks_project(
 def get_or_create_patient_feature_group(  # noqa: PLR0913
     fs: Any,
     name: str = "pacientes_higado_fg",
-    version: int = 1,
+    version: int = 2,
     *,
     description: str = "Grupo de características históricas de pacientes para detección de enfermedad hepática",
     primary_key: list[str] | None = None,
@@ -226,7 +230,7 @@ def get_or_create_patient_feature_group(  # noqa: PLR0913
     Args:
         fs: Objeto del Feature Store (`project.get_feature_store()`).
         name: Nombre del Feature Group.
-        version: Versión del Feature Group.
+        version: Versión del Feature Group (por defecto: 2).
         description: Descripción del Feature Group.
         primary_key: Lista de columnas que componen la clave primaria.
         event_time: Columna que representa la fecha del evento.
@@ -253,7 +257,7 @@ def get_or_create_patient_feature_group(  # noqa: PLR0913
 def backfill_patient_features_to_store(  # noqa: PLR0913
     df: pd.DataFrame,
     feature_group_name: str = "pacientes_higado_fg",
-    version: int = 1,
+    version: int = 2,
     *,
     api_key: str | None = None,
     project_name: str | None = None,
@@ -265,7 +269,7 @@ def backfill_patient_features_to_store(  # noqa: PLR0913
     Args:
         df: DataFrame de entrada con los datos de pacientes.
         feature_group_name: Nombre del Feature Group.
-        version: Versión del Feature Group.
+        version: Versión del Feature Group (por defecto: 2).
         api_key: Llave API de Hopsworks (opcional).
         project_name: Nombre del proyecto (opcional).
         time_travel_format: Formato temporal ('HUDI' o 'DELTA').
@@ -294,12 +298,24 @@ def backfill_patient_features_to_store(  # noqa: PLR0913
     feature_group.insert(df_prepared, write_options={"wait_for_job": wait_for_job})
     logger.info("Inserción completada exitosamente.")
 
-    # Adjuntar descripciones a las características
+    # Adjuntar descripciones a las características reportando fallos si ocurren
+    metadata_warnings: list[str] = []
     for feat_name, desc in FEATURE_DESCRIPTIONS.items():
         if feat_name in df_prepared.columns:
-            with contextlib.suppress(Exception):
+            try:
                 feature_group.update_feature_description(feat_name, desc)
-    logger.info("Descripciones de características actualizadas en Hopsworks.")
+            except Exception as err:
+                logger.warning(
+                    f"No se pudo actualizar la descripción de la característica '{feat_name}': {err}"
+                )
+                metadata_warnings.append(feat_name)
+
+    if metadata_warnings:
+        logger.warning(
+            f"Algunas descripciones de características no pudieron registrarse: {metadata_warnings}"
+        )
+    else:
+        logger.info("Descripciones de características actualizadas en Hopsworks.")
 
     return {
         "status": "success",
@@ -307,4 +323,5 @@ def backfill_patient_features_to_store(  # noqa: PLR0913
         "version": version,
         "records_inserted": len(df_prepared),
         "columns": list(df_prepared.columns),
+        "metadata_warnings": metadata_warnings,
     }

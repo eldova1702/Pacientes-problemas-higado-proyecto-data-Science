@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -30,11 +31,9 @@ def sample_dataframe() -> pd.DataFrame:
     )
 
 
-def test_load_dataset_custom_parquet(
-    tmp_path: pytest.TempPathFactory, sample_dataframe: pd.DataFrame
-) -> None:
+def test_load_dataset_custom_parquet(tmp_path: Path, sample_dataframe: pd.DataFrame) -> None:
     """Verifica la carga de datos desde un archivo parquet personalizado."""
-    parquet_path = tmp_path / "test_data.parquet"  # type: ignore[operator]
+    parquet_path = tmp_path / "test_data.parquet"
     sample_dataframe.to_parquet(parquet_path)
 
     df_loaded = load_dataset(parquet_path)
@@ -42,15 +41,47 @@ def test_load_dataset_custom_parquet(
     assert list(df_loaded.columns) == list(sample_dataframe.columns)
 
 
-def test_load_dataset_custom_csv(
-    tmp_path: pytest.TempPathFactory, sample_dataframe: pd.DataFrame
-) -> None:
+def test_load_dataset_custom_csv(tmp_path: Path, sample_dataframe: pd.DataFrame) -> None:
     """Verifica la carga de datos desde un archivo CSV personalizado."""
-    csv_path = tmp_path / "test_data.csv"  # type: ignore[operator]
+    csv_path = tmp_path / "test_data.csv"
     sample_dataframe.to_csv(csv_path, index=False)
 
     df_loaded = load_dataset(csv_path)
     assert df_loaded.shape == sample_dataframe.shape
+
+
+def test_load_dataset_custom_raw_csv_with_dataset_col(tmp_path: Path) -> None:
+    """Verifica la carga y renombre automático de Dataset a Diagnosis en CSV raw."""
+    csv_path = tmp_path / "raw_data.csv"
+    raw_df = pd.DataFrame(
+        {
+            "Age": [50],
+            "Gender": ["Male"],
+            "Total_Bilirubin": [1.0],
+            "Direct_Bilirubin": [0.3],
+            "Alkaline_Phosphotase": [150.0],
+            "Alamine_Aminotransferase": [25.0],
+            "Aspartate_Aminotransferase": [28.0],
+            "Total_Protiens": [7.0],
+            "Albumin": [3.5],
+            "Albumin_and_Globulin_Ratio": [1.0],
+            "Dataset": [1],
+            "Extra_Empty_Col": ["null"],
+        }
+    )
+    raw_df.to_csv(csv_path, index=False)
+
+    df_loaded = load_dataset(csv_path)
+    assert "Diagnosis" in df_loaded.columns
+    assert "Dataset" not in df_loaded.columns
+    assert "Extra_Empty_Col" not in df_loaded.columns
+
+
+def test_load_dataset_custom_path_not_found(tmp_path: Path) -> None:
+    """Verifica que se lance FileNotFoundError si la ruta personalizada no existe."""
+    non_existent = tmp_path / "non_existent.parquet"
+    with pytest.raises(FileNotFoundError, match="La ruta de datos especificada no existe"):
+        load_dataset(non_existent)
 
 
 def test_load_dataset_file_not_found() -> None:
@@ -77,11 +108,11 @@ def test_main_dry_run(sample_dataframe: pd.DataFrame) -> None:
 
 
 def test_main_success(sample_dataframe: pd.DataFrame) -> None:
-    """Verifica la ejecución exitosa de main llamando al backfill."""
+    """Verifica la ejecución exitosa de main llamando al backfill con argumentos explícitos."""
     mock_result = {
         "status": "success",
         "feature_group_name": "pacientes_higado_fg",
-        "version": 1,
+        "version": 2,
         "records_inserted": len(sample_dataframe),
     }
 
@@ -90,13 +121,44 @@ def test_main_success(sample_dataframe: pd.DataFrame) -> None:
         patch(
             "src.pipelines.feature_backfill.backfill_patient_features_to_store",
             return_value=mock_result,
-        ),
+        ) as mock_backfill,
         patch(
-            "sys.argv", ["feature_backfill", "--fg-name", "pacientes_higado_fg", "--version", "1"]
+            "sys.argv", ["feature_backfill", "--fg-name", "pacientes_higado_fg", "--version", "2"]
         ),
     ):
         exit_code = main()
         assert exit_code == 0
+        mock_backfill.assert_called_once_with(
+            df=sample_dataframe,
+            feature_group_name="pacientes_higado_fg",
+            version=2,
+        )
+
+
+def test_main_default_version(sample_dataframe: pd.DataFrame) -> None:
+    """Verifica que main use version=2 por defecto cuando no se especifica --version."""
+    mock_result = {
+        "status": "success",
+        "feature_group_name": "pacientes_higado_fg",
+        "version": 2,
+        "records_inserted": len(sample_dataframe),
+    }
+
+    with (
+        patch("src.pipelines.feature_backfill.load_dataset", return_value=sample_dataframe),
+        patch(
+            "src.pipelines.feature_backfill.backfill_patient_features_to_store",
+            return_value=mock_result,
+        ) as mock_backfill,
+        patch("sys.argv", ["feature_backfill"]),
+    ):
+        exit_code = main()
+        assert exit_code == 0
+        mock_backfill.assert_called_once_with(
+            df=sample_dataframe,
+            feature_group_name="pacientes_higado_fg",
+            version=2,
+        )
 
 
 def test_main_exception() -> None:
