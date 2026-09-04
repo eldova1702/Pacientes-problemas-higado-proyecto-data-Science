@@ -59,6 +59,16 @@ def test_prepare_patient_features_column_names(sample_raw_dataframe: pd.DataFram
     assert list(prepared.columns) == expected_cols
 
 
+def test_prepare_patient_features_dtypes(sample_raw_dataframe: pd.DataFrame) -> None:
+    """Verifica que las columnas numéricas e identificadores mantengan sus tipos nativos."""
+    prepared = prepare_patient_features_for_feature_store(sample_raw_dataframe)
+
+    assert prepared["patient_id"].dtype == "int64"
+    assert pd.api.types.is_numeric_dtype(prepared["age"])
+    assert pd.api.types.is_float_dtype(prepared["total_bilirubin"])
+    assert pd.api.types.is_datetime64_any_dtype(prepared["event_time"])
+
+
 def test_prepare_patient_features_primary_key(sample_raw_dataframe: pd.DataFrame) -> None:
     """Verifica la generación de la clave primaria única patient_id."""
     prepared = prepare_patient_features_for_feature_store(sample_raw_dataframe, start_id=101)

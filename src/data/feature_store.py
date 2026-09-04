@@ -142,8 +142,8 @@ def prepare_patient_features_for_feature_store(
     remaining_cols = [col for col in df_prepared.columns if col not in priority_cols]
     df_prepared = df_prepared[priority_cols + remaining_cols]
 
-    # Convertir valores nulos a None para compatibilidad con esquemas Avro
-    return df_prepared.astype(object).where(pd.notna(df_prepared), None)
+    # Retornar preservando dtypes nativos (int64, datetime64, float64) y nulos normalizados
+    return df_prepared
 
 
 def get_hopsworks_project(

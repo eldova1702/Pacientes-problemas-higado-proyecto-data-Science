@@ -63,11 +63,13 @@ def load_dataset(data_path: Path | None = None) -> pd.DataFrame:
         logger.info(f"Cargando datos desde ruta especificada: {data_path}")
         if data_path.suffix == ".parquet":
             return pd.read_parquet(data_path)
-        df_csv = pd.read_csv(data_path)
-        if "Dataset" in df_csv.columns:
-            valid_cols = [c for c in VALID_RAW_COLUMNS if c in df_csv.columns]
-            df_csv = df_csv[valid_cols].rename(columns={"Dataset": "Diagnosis"})
-        return df_csv
+        # Inspeccionar encabezado para aplicar usecols si es el formato raw de pacientes
+        header_cols = list(pd.read_csv(data_path, nrows=0).columns)
+        if "Dataset" in header_cols:
+            usecols = [c for c in VALID_RAW_COLUMNS if c in header_cols]
+            df_csv = pd.read_csv(data_path, usecols=usecols)
+            return df_csv.rename(columns={"Dataset": "Diagnosis"})
+        return pd.read_csv(data_path)
 
     if INTERMEDIATE_DATA_PATH.exists():
         logger.info(f"Cargando datos intermedios desde {INTERMEDIATE_DATA_PATH}")
