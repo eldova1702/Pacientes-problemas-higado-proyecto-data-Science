@@ -43,7 +43,12 @@ class ColumnStandardizer(BaseEstimator, TransformerMixin):
 
     def transform(self, X: pd.DataFrame) -> pd.DataFrame:
         transformed = X.copy()
-        transformed.columns = [str(c).strip().lower() for c in transformed.columns]
+        transformed.columns = (
+            pd.Index([str(c).strip() for c in transformed.columns])
+            .str.replace(r"[^a-zA-Z0-9]+", "_", regex=True)
+            .str.strip("_")
+            .str.lower()
+        )
         return transformed
 
     def get_feature_names_out(
@@ -51,7 +56,13 @@ class ColumnStandardizer(BaseEstimator, TransformerMixin):
     ) -> np.ndarray:
         if input_features is None:
             input_features = self.feature_names_in_
-        return np.asarray([str(c).strip().lower() for c in input_features], dtype=object)
+        cleaned = (
+            pd.Index([str(c).strip() for c in input_features])
+            .str.replace(r"[^a-zA-Z0-9]+", "_", regex=True)
+            .str.strip("_")
+            .str.lower()
+        )
+        return np.asarray(cleaned, dtype=object)
 
 
 class ClinicalFeatureBuilder(BaseEstimator, TransformerMixin):
@@ -207,5 +218,9 @@ def prepare_supervised_data(
 
 def load_supervised_data(data_path: Path) -> tuple[pd.DataFrame, pd.Series]:
     """Carga datos desde Parquet o CSV y los prepara para aprendizaje supervisado."""
-    df = pd.read_parquet(data_path) if data_path.suffix == ".parquet" else pd.read_csv(data_path)
+    df = (
+        pd.read_parquet(data_path)
+        if data_path.suffix.lower() == ".parquet"
+        else pd.read_csv(data_path)
+    )
     return prepare_supervised_data(df)

@@ -184,7 +184,7 @@ def fetch_training_data(  # noqa: PLR0913, PLR0917
         raise FileNotFoundError(msg)
 
     logger.info(f"Cargando datos de entrenamiento desde archivo local: {source_path}")
-    if source_path.suffix == ".parquet":
+    if source_path.suffix.lower() == ".parquet":
         df_local = pd.read_parquet(source_path)
     else:
         df_local = pd.read_csv(source_path)
@@ -467,7 +467,8 @@ def save_model_artifacts(  # noqa: PLR0913, PLR0917
     output_dir: Path,
     model_type: str,
     feature_names: list[str],
-    save_main_model_symlink: bool = True,
+    sync_with_main_model: bool = True,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     """Almacena el pipeline entrenado y sus métricas en disco.
 
@@ -477,12 +478,16 @@ def save_model_artifacts(  # noqa: PLR0913, PLR0917
         output_dir: Directorio de destino para los artefactos.
         model_type: Identificador del modelo entrenado.
         feature_names: Nombres de las variables de entrada.
-        save_main_model_symlink: Si es True, copia/guarda también en models/modelo_final.joblib
-            para compatibilidad directa con app.py.
+        sync_with_main_model: Si es True, sincroniza y guarda también una copia en
+            models/modelo_final.joblib para compatibilidad directa con app.py.
+        **kwargs: Argumentos adicionales de compatibilidad (ej. save_main_model_symlink).
 
     Returns:
         Diccionario con las rutas absolutas de los archivos guardados.
     """
+    if "save_main_model_symlink" in kwargs:
+        sync_with_main_model = bool(kwargs["save_main_model_symlink"])
+
     output_dir.mkdir(parents=True, exist_ok=True)
     model_path = output_dir / "model.joblib"
     metrics_path = output_dir / "metrics.json"
@@ -510,8 +515,8 @@ def save_model_artifacts(  # noqa: PLR0913, PLR0917
         "metrics_path": str(metrics_path),
     }
 
-    # Guardar en models/modelo_final.joblib si corresponde
-    if save_main_model_symlink:
+    # Sincronizar en models/modelo_final.joblib si corresponde
+    if sync_with_main_model:
         main_model_path = PROJECT_ROOT / "models" / "modelo_final.joblib"
         try:
             main_model_path.parent.mkdir(parents=True, exist_ok=True)
@@ -650,6 +655,7 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         output_dir=target_output_dir,
         model_type=model_type,
         feature_names=list(X_train.columns),
+        sync_with_main_model=True,
     )
     figures = plot_and_save_figures(
         pipeline=trained_pipeline,

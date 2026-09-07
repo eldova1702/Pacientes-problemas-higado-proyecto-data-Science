@@ -141,6 +141,15 @@ def test_fetch_training_data_fallback_local(tmp_path: Path, sample_dataset: pd.D
     assert fv is None
     assert proj is None
 
+    # Test con extensión en mayúsculas (.PARQUET)
+    upper_file = tmp_path / "patients_data.PARQUET"
+    sample_dataset.to_parquet(upper_file)
+    df_upper, _, _ = fetch_training_data(
+        use_feature_store=False,
+        local_data_path=upper_file,
+    )
+    assert len(df_upper) == len(sample_dataset)
+
 
 def test_fetch_training_data_file_not_found(tmp_path: Path) -> None:
     """Lanza FileNotFoundError si ni el Feature Store ni el archivo local existen."""
@@ -258,7 +267,7 @@ def test_save_model_artifacts(tmp_path: Path, sample_dataset: pd.DataFrame) -> N
         output_dir=output_dir,
         model_type="logistic_regression",
         feature_names=list(X_train.columns),
-        save_main_model_symlink=False,
+        sync_with_main_model=False,
     )
 
     assert Path(saved["model_path"]).exists()
@@ -369,8 +378,8 @@ def test_main_cli_error() -> None:
     assert exit_code == 1
 
 
-def test_save_main_model_symlink(tmp_path: Path, sample_dataset: pd.DataFrame) -> None:
-    """Verifica que el modelo principal se guarde cuando save_main_model_symlink es True."""
+def test_save_main_model_sync(tmp_path: Path, sample_dataset: pd.DataFrame) -> None:
+    """Verifica que el modelo principal se guarde cuando sync_with_main_model es True."""
     X_train, X_test, y_train, y_test = split_training_data(sample_dataset, test_size=0.3)
     pipeline = build_training_pipeline("logistic_regression")
     trained = train_model(pipeline, X_train, y_train)
@@ -383,11 +392,22 @@ def test_save_main_model_symlink(tmp_path: Path, sample_dataset: pd.DataFrame) -
         output_dir=output_dir,
         model_type="logistic_regression",
         feature_names=list(X_train.columns),
-        save_main_model_symlink=True,
+        sync_with_main_model=True,
     )
 
     assert "main_model_path" in saved
     assert Path(saved["main_model_path"]).exists()
+
+    # Verificar también compatibilidad retroactiva con save_main_model_symlink
+    saved_compat = save_model_artifacts(
+        pipeline=trained,
+        metrics=metrics,
+        output_dir=tmp_path / "compat_output",
+        model_type="logistic_regression",
+        feature_names=list(X_train.columns),
+        save_main_model_symlink=True,
+    )
+    assert "main_model_path" in saved_compat
 
 
 def test_main_module_execution(tmp_path: Path, sample_dataset: pd.DataFrame) -> None:

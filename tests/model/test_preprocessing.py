@@ -197,7 +197,7 @@ def test_prepare_supervised_data_invalid_values() -> None:
 
 
 def test_load_supervised_data(tmp_path: Path, sample_raw_dataframe: pd.DataFrame) -> None:
-    """Verifica la carga desde archivo Parquet y CSV temporal."""
+    """Verifica la carga desde archivo Parquet y CSV temporal, incluyendo extensiones en mayúsculas."""
     parquet_path = tmp_path / "patients.parquet"
     sample_raw_dataframe.to_parquet(parquet_path)
 
@@ -205,9 +205,43 @@ def test_load_supervised_data(tmp_path: Path, sample_raw_dataframe: pd.DataFrame
     assert len(X_pq) == len(sample_raw_dataframe)
     assert len(y_pq) == len(sample_raw_dataframe)
 
+    # Test con extensión en mayúsculas (.PARQUET)
+    upper_pq_path = tmp_path / "patients.PARQUET"
+    sample_raw_dataframe.to_parquet(upper_pq_path)
+    X_upq, y_upq = load_supervised_data(upper_pq_path)
+    assert len(X_upq) == len(sample_raw_dataframe)
+    assert len(y_upq) == len(sample_raw_dataframe)
+
     csv_path = tmp_path / "patients.csv"
     sample_raw_dataframe.to_csv(csv_path, index=False)
 
     X_csv, y_csv = load_supervised_data(csv_path)
     assert len(X_csv) == len(sample_raw_dataframe)
     assert len(y_csv) == len(sample_raw_dataframe)
+
+
+def test_column_standardizer_handles_spaces_and_special_characters() -> None:
+    """Verifica que ColumnStandardizer convierta espacios y caracteres no alfanuméricos a snake_case."""
+    df_messy = pd.DataFrame(
+        {
+            "Total Bilirubin": [1.0],
+            "Direct-Bilirubin": [0.5],
+            "AST / ALT Ratio": [1.2],
+            "  Age  ": [45],
+        }
+    )
+    standardizer = ColumnStandardizer()
+    res = standardizer.fit_transform(df_messy)
+
+    assert list(res.columns) == [
+        "total_bilirubin",
+        "direct_bilirubin",
+        "ast_alt_ratio",
+        "age",
+    ]
+    assert list(standardizer.get_feature_names_out()) == [
+        "total_bilirubin",
+        "direct_bilirubin",
+        "ast_alt_ratio",
+        "age",
+    ]
