@@ -299,7 +299,11 @@ def test_build_portable_summary_uses_relative_paths(tmp_path: Path) -> None:
             "model_path": str(PROJECT_ROOT / "models" / "liver_patient_model" / "model.joblib"),
             "input_data_path": str(tmp_path / "external.parquet"),
             "predictions_path": str(
-                PROJECT_ROOT / "models" / "liver_patient_model" / "predictions" / "predictions.parquet"
+                PROJECT_ROOT
+                / "models"
+                / "liver_patient_model"
+                / "predictions"
+                / "predictions.parquet"
             ),
             "figures": [str(PROJECT_ROOT / "models" / "liver_patient_model" / "figure.png")],
         }
@@ -417,9 +421,7 @@ def test_run_inference_pipeline_without_plots(
 
     assert result["figures"] == []
     assert Path(result["report_path"]).exists()
-    assert "Visualización no disponible" in Path(result["report_path"]).read_text(
-        encoding="utf-8"
-    )
+    assert "Visualización no disponible" in Path(result["report_path"]).read_text(encoding="utf-8")
 
 
 def test_main_cli_success(
