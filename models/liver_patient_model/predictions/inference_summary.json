@@ -1,0 +1,19 @@
+{
+    "status": "success",
+    "model_path": "models/liver_patient_model/model.joblib",
+    "model_type": "logistic_regression",
+    "input_data_path": "data/01_raw/Pacientes_porblemas_higado_india.csv",
+    "n_samples": 663,
+    "positive_predictions": 343,
+    "negative_predictions": 320,
+    "positive_ratio": 0.5173,
+    "transformed_shape": [
+        663,
+        13
+    ],
+    "predictions_path": "models/liver_patient_model/predictions/predictions.parquet",
+    "figures": [
+        "models/liver_patient_model/predictions/images/prediction_distribution.png"
+    ],
+    "report_path": "models/liver_patient_model/predictions/inference_report.html"
+}
