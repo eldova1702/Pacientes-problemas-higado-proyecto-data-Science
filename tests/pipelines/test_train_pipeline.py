@@ -329,6 +329,8 @@ def test_run_training_pipeline_dry_run(tmp_path: Path, sample_dataset: pd.DataFr
     assert result["model_type"] == "logistic_regression"
     assert "metrics" in result
     assert "saved_paths" in result
+    assert "hopsworks_model_version" in result
+    assert result["hopsworks_model_version"] is None
     assert "split_validation" in result
     assert result["split_validation"] is not None
     assert result["split_validation"]["passed"] is True

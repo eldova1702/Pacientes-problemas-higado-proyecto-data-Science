@@ -705,10 +705,9 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         "model_type": model_type,
         "metrics": metrics,
         "saved_paths": saved_paths,
+        "hopsworks_model_version": hw_model_version,
         "split_validation": split_validation_results,
     }
-    if hw_model_version is not None:
-        result["hopsworks_model_version"] = hw_model_version
 
     logger.info(f"=== Training Pipeline Finalizado ({result['status']}) ===")
     return result

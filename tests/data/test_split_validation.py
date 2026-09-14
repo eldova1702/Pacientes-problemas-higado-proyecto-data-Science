@@ -17,6 +17,7 @@ from src.data.split_validation import (
     check_label_distribution,
     check_new_categories,
     check_sample_leakage,
+    generate_html_report,
     validate_train_test_split,
 )
 
@@ -280,3 +281,77 @@ def test_validate_train_test_split_no_raise_on_error(
     assert results["passed"] is False
     assert results["status"] == "failed"
     assert len(results["errors"]) > 0
+
+
+def test_check_dataset_sizes_one_partition_empty(
+    clean_train_test_data: tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series],
+) -> None:
+    """Falla si una de las dos particiones está vacía."""
+    X_train, _, _, _ = clean_train_test_data
+    res = check_dataset_sizes(X_train, pd.DataFrame())
+    assert res["status"] == "failed"
+    assert "vacíos" in res["message"]
+
+
+def test_check_feature_drift_skipped_small_samples(
+    clean_train_test_data: tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series],
+) -> None:
+    """Marca como skipped y warning cuando una columna tiene muestras insuficientes."""
+    X_train, X_test, _, _ = clean_train_test_data
+    X_test_small = X_test.copy()
+    X_test_small["age"] = np.nan  # Menos de 5 valores numéricos no nulos
+
+    res = check_feature_drift(X_train, X_test_small)
+    assert "age" in res["skipped_columns"]
+    assert res["status"] == "warning"
+    assert res["features"]["age"]["skipped"] is True
+
+
+def test_generate_html_report_escapes_markup(tmp_path: Path) -> None:
+    """Verifica que caracteres y etiquetas HTML en los resultados se escapen de forma segura."""
+    html_file = tmp_path / "xss_test.html"
+    malicious_results = {
+        "status": "warning",
+        "checks": {
+            "test_check<script>alert(1)</script>": {
+                "status": "warning",
+                "message": "Mensaje con <b>inyección HTML</b> y & ampersand",
+            }
+        },
+    }
+    generate_html_report(malicious_results, html_file)
+    assert html_file.exists()
+    content = html_file.read_text(encoding="utf-8")
+    assert "<script>" not in content.lower()
+    assert "&lt;script&gt;" in content.lower()
+    assert "<b>inyección html</b>" not in content.lower()
+    assert "&lt;b&gt;inyección html&lt;/b&gt;" in content.lower()
+
+
+def test_validate_train_test_split_json_contains_both_report_paths(
+    clean_train_test_data: tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series],
+    tmp_path: Path,
+) -> None:
+    """Verifica que el archivo JSON guardado en disco contenga las rutas a JSON y HTML."""
+    X_train, X_test, y_train, y_test = clean_train_test_data
+    out_dir = tmp_path / "report_paths_test"
+
+    results = validate_train_test_split(
+        X_train=X_train,
+        X_test=X_test,
+        y_train=y_train,
+        y_test=y_test,
+        output_dir=out_dir,
+    )
+    json_path = Path(results["report_paths"]["json"])
+    html_path = Path(results["report_paths"]["html"])
+    assert json_path.exists()
+    assert html_path.exists()
+
+    with open(json_path, encoding="utf-8") as f:
+        disk_json = json.load(f)
+
+    assert "report_paths" in disk_json
+    assert "json" in disk_json["report_paths"]
+    assert "html" in disk_json["report_paths"]
+    assert disk_json["report_paths"]["html"] == str(html_path)

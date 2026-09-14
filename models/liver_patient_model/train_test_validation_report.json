@@ -57,6 +57,8 @@
             "status": "passed",
             "drifted_columns_count": 0,
             "drifted_columns": [],
+            "skipped_columns": [],
+            "failed_eval_columns": [],
             "total_numeric_columns": 9,
             "features": {
                 "Age": {
@@ -105,10 +107,13 @@
                     "drift_detected": false
                 }
             },
-            "message": "Sin feature drift relevante: 9/9 variables presentan distribuciones homogéneas."
+            "message": "Sin feature drift relevante: 9/9 variables presentan distribuciones homogéneas (alpha=0.05)."
         }
     },
     "warnings": [],
     "errors": [],
-    "report_paths": {}
+    "report_paths": {
+        "json": "C:\\Users\\dova1\\Pacientes-problemas-higado-proyecto-data-Science\\models\\liver_patient_model\\train_test_validation_report.json",
+        "html": "C:\\Users\\dova1\\Pacientes-problemas-higado-proyecto-data-Science\\models\\liver_patient_model\\train_test_validation_report.html"
+    }
 }

@@ -11,6 +11,7 @@ Referencias:
 
 from __future__ import annotations
 
+import html
 import json
 import logging
 from pathlib import Path
@@ -147,18 +148,23 @@ def check_dataset_sizes(
         Diccionario con los tamaños y evaluación de proporción.
     """
     total = len(X_train) + len(X_test)
-    if total == 0:
+    if len(X_train) == 0 or len(X_test) == 0:
         return {
             "status": "failed",
-            "train_size": 0,
-            "test_size": 0,
-            "actual_test_ratio": 0.0,
-            "message": "Los conjuntos train y test están vacíos.",
+            "train_size": len(X_train),
+            "test_size": len(X_test),
+            "total_samples": total,
+            "actual_test_ratio": round(len(X_test) / max(total, 1), 4),
+            "expected_test_ratio": round(expected_test_ratio, 4),
+            "message": (
+                "Uno o ambos conjuntos (train o test) están vacíos. "
+                f"Train={len(X_train)}, Test={len(X_test)}."
+            ),
         }
 
     actual_ratio = len(X_test) / total
     ratio_diff = abs(actual_ratio - expected_test_ratio)
-    is_valid = ratio_diff <= tolerance and len(X_test) > 0 and len(X_train) > 0
+    is_valid = ratio_diff <= tolerance
 
     return {
         "status": "passed" if is_valid else "warning",
@@ -299,11 +305,11 @@ def check_label_distribution(
     }
 
 
-def check_feature_drift(
+def check_feature_drift(  # noqa: C901
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     numeric_cols: list[str] | None = None,
-    alpha: float = 0.01,
+    alpha: float = 0.05,
 ) -> dict[str, Any]:
     """Evalúa el desvío estadístico de distribución de características mediante Kolmogorov-Smirnov.
 
@@ -325,12 +331,25 @@ def check_feature_drift(
 
     drift_results: dict[str, dict[str, Any]] = {}
     drifted_columns: list[str] = []
+    skipped_columns: list[str] = []
+    failed_eval_columns: list[str] = []
 
     for col in cols:
         s_train = pd.to_numeric(X_train[col], errors="coerce").dropna()
         s_test = pd.to_numeric(X_test[col], errors="coerce").dropna()
 
         if len(s_train) < MIN_SAMPLE_SIZE_FOR_KS or len(s_test) < MIN_SAMPLE_SIZE_FOR_KS:
+            drift_results[col] = {
+                "statistic": None,
+                "p_value": None,
+                "drift_detected": False,
+                "skipped": True,
+                "reason": (
+                    f"Muestras insuficientes (train: {len(s_train)}, test: {len(s_test)}, "
+                    f"mínimo: {MIN_SAMPLE_SIZE_FOR_KS})."
+                ),
+            }
+            skipped_columns.append(col)
             continue
 
         try:
@@ -338,40 +357,65 @@ def check_feature_drift(
             p_val = float(ks_res.pvalue)
             stat = float(ks_res.statistic)
             has_drift = p_val < alpha
-        except Exception:
-            has_drift = False
-            p_val = 1.0
-            stat = 0.0
+            drift_results[col] = {
+                "statistic": round(stat, 4),
+                "p_value": round(p_val, 4),
+                "drift_detected": has_drift,
+            }
+            if has_drift:
+                drifted_columns.append(col)
+        except Exception as exc:
+            drift_results[col] = {
+                "statistic": None,
+                "p_value": None,
+                "drift_detected": False,
+                "evaluation_error": str(exc),
+            }
+            failed_eval_columns.append(col)
 
-        drift_results[col] = {
-            "statistic": round(stat, 4),
-            "p_value": round(p_val, 4),
-            "drift_detected": has_drift,
-        }
-        if has_drift:
-            drifted_columns.append(col)
+    evaluated_count = len(cols) - len(skipped_columns) - len(failed_eval_columns)
+    drift_ratio = len(drifted_columns) / max(evaluated_count, 1)
 
-    drift_ratio = len(drifted_columns) / max(len(cols), 1)
-    # Si más del 30% de las variables presentan desvío significativo, alerta
-    if len(drifted_columns) == 0:
+    has_issues = bool(drifted_columns or skipped_columns or failed_eval_columns)
+    if not has_issues:
         status = "passed"
-    elif drift_ratio > WARNING_DRIFT_RATIO:
+    elif failed_eval_columns or skipped_columns or drift_ratio > WARNING_DRIFT_RATIO:
         status = "warning"
     else:
         status = "passed"
+
+    message_parts: list[str] = []
+    if drifted_columns:
+        message_parts.append(
+            f"Desvío detectado en {len(drifted_columns)} variables: {drifted_columns}"
+        )
+    if skipped_columns:
+        message_parts.append(
+            f"{len(skipped_columns)} variables omitidas por datos insuficientes: {skipped_columns}"
+        )
+    if failed_eval_columns:
+        message_parts.append(
+            f"{len(failed_eval_columns)} variables con error en cálculo: {failed_eval_columns}"
+        )
+
+    msg = (
+        "; ".join(message_parts)
+        if message_parts
+        else (
+            f"Sin feature drift relevante: {len(cols)}/{len(cols)} "
+            f"variables presentan distribuciones homogéneas (alpha={alpha})."
+        )
+    )
 
     return {
         "status": status,
         "drifted_columns_count": len(drifted_columns),
         "drifted_columns": drifted_columns,
+        "skipped_columns": skipped_columns,
+        "failed_eval_columns": failed_eval_columns,
         "total_numeric_columns": len(cols),
         "features": drift_results,
-        "message": (
-            f"Sin feature drift relevante: {len(cols) - len(drifted_columns)}/{len(cols)} "
-            "variables presentan distribuciones homogéneas."
-            if len(drifted_columns) == 0
-            else f"Desvío estadístico detectado en {len(drifted_columns)} variables: {drifted_columns}."
-        ),
+        "message": msg,
     }
 
 
@@ -395,16 +439,22 @@ def generate_html_report(validation_results: dict[str, Any], report_path: Path) 
         c_status = check_data.get("status", "passed")
         c_color = status_colors.get(c_status, "#6b7280")
         msg = check_data.get("message", "")
+
+        safe_name = html.escape(str(check_name).replace("_", " ").title())
+        safe_status = html.escape(str(c_status))
+        safe_msg = html.escape(str(msg))
+
         checks_html += f"""
         <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid {c_color}; background: #f9fafb; border-radius: 4px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong style="font-size: 15px; color: #1f2937;">{check_name.replace("_", " ").title()}</strong>
-                <span style="background: {c_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">{c_status}</span>
+                <strong style="font-size: 15px; color: #1f2937;">{safe_name}</strong>
+                <span style="background: {c_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">{safe_status}</span>
             </div>
-            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">{msg}</p>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">{safe_msg}</p>
         </div>
         """
 
+    safe_overall_status = html.escape(str(overall_status))
     html_content = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -425,7 +475,7 @@ def generate_html_report(validation_results: dict[str, Any], report_path: Path) 
                 <small style="color: #6b7280;">Detección de Data Leakage y Distribuciones Clínicas</small>
             </div>
             <span style="background: {badge_color}; color: white; padding: 6px 14px; border-radius: 20px; font-weight: bold; text-transform: uppercase; font-size: 14px;">
-                {overall_status}
+                {safe_overall_status}
             </span>
         </div>
         <div class="checks">
@@ -575,21 +625,23 @@ def validate_train_test_split(  # noqa: C901, PLR0912, PLR0913, PLR0915, PLR0917
         json_path = output_dir / "train_test_validation_report.json"
         html_path = output_dir / "train_test_validation_report.html"
         output_dir.mkdir(parents=True, exist_ok=True)
+        report_paths["json"] = str(json_path)
+        report_paths["html"] = str(html_path)
+
+        try:
+            generate_html_report(result, html_path)
+            logger.info(f"Reporte de validación train/test guardado en HTML: {html_path}")
+        except Exception as exc:
+            logger.warning(f"No fue posible guardar reporte HTML de validación: {exc}")
+            report_paths.pop("html", None)
 
         try:
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=4, ensure_ascii=False)
-            report_paths["json"] = str(json_path)
             logger.info(f"Reporte de validación train/test guardado en JSON: {json_path}")
         except Exception as exc:
             logger.warning(f"No fue posible guardar reporte JSON de validación: {exc}")
-
-        try:
-            generate_html_report(result, html_path)
-            report_paths["html"] = str(html_path)
-            logger.info(f"Reporte de validación train/test guardado en HTML: {html_path}")
-        except Exception as exc:
-            logger.warning(f"No fue posible guardar reporte HTML de validación: {exc}")
+            report_paths.pop("json", None)
 
     if raise_on_error and errors:
         msg = (
