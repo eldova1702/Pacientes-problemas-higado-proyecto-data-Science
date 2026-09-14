@@ -351,6 +351,35 @@ def test_generate_html_report_escapes_markup(tmp_path: Path) -> None:
     assert "&lt;b&gt;inyección&lt;/b&gt;" in content
 
 
+def test_generate_html_report_embeds_base64_images(tmp_path: Path) -> None:
+    """Verifica que las imágenes existentes se incrusten como data URIs base64 en el HTML."""
+    html_file = tmp_path / "report.html"
+    images_dir = tmp_path / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    sample_img = images_dir / "sample.png"
+    sample_img.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+
+    results = {
+        "status": "passed",
+        "cross_validation": {"metrics": {}},
+        "train_metrics": {},
+        "test_metrics": {},
+        "fit_analysis": {
+            "status": "passed",
+            "diagnosis": "good_fit",
+            "message": "Buen ajuste",
+            "observations": [],
+            "recommendations": [],
+        },
+        "generated_figures": [str(sample_img)],
+    }
+    generate_html_report(results, html_file)
+
+    assert html_file.exists()
+    content = html_file.read_text(encoding="utf-8")
+    assert "data:image/png;base64," in content
+
+
 def test_feature_pipeline_available() -> None:
     """Sanity check de que el preprocesamiento compartido se construye."""
     pipeline = build_feature_pipeline()

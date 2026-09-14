@@ -10,6 +10,7 @@ Referencias:
 
 from __future__ import annotations
 
+import base64
 import html
 import json
 import logging
@@ -484,10 +485,30 @@ def generate_html_report(validation_results: dict[str, Any], report_path: Path) 
     figures = validation_results.get("generated_figures", [])
     figures_html = ""
     for figure in figures:
-        figure_name = Path(str(figure)).name
+        figure_path = Path(str(figure))
+        figure_name = figure_path.name
+
+        resolved_path = (
+            figure_path if figure_path.is_absolute() else report_path.parent / figure_path
+        )
+        if not resolved_path.exists():
+            candidate = report_path.parent / "images" / figure_name
+            if candidate.exists():
+                resolved_path = candidate
+
+        img_src = f"images/{html.escape(figure_name)}"
+        if resolved_path.exists():
+            try:
+                encoded = base64.b64encode(resolved_path.read_bytes()).decode("ascii")
+                img_src = f"data:image/png;base64,{encoded}"
+            except Exception as exc:
+                logger.warning(
+                    f"No fue posible codificar la imagen '{figure_name}' en base64: {exc}"
+                )
+
         figures_html += (
             "<div style='margin: 12px 0;'>"
-            f"<img src='images/{html.escape(figure_name)}' alt='{html.escape(figure_name)}' "
+            f"<img src='{img_src}' alt='{html.escape(figure_name)}' "
             "style='max-width: 100%; border: 1px solid #e5e7eb; border-radius: 6px;'/>"
             "</div>"
         )
