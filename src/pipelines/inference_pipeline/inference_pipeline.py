@@ -240,6 +240,26 @@ def load_input_data(data_path: Path) -> pd.DataFrame:
     return df
 
 
+def extract_metadata(df: pd.DataFrame) -> pd.DataFrame:
+    """Extrae las columnas de metadatos (p. ej. patient_id, event_time) presentes en el DataFrame.
+
+    Permite conservar la trazabilidad de cada muestra asociándola con su diagnóstico final
+    sin ingresar metadatos al pipeline de inferencia.
+
+    Args:
+        df: DataFrame crudo de entrada.
+
+    Returns:
+        DataFrame con las columnas de metadatos identificadas, o DataFrame vacío con el mismo índice.
+    """
+    metadata_cols = [
+        column for column in df.columns if _normalize_column_name(column) in METADATA_COLUMNS
+    ]
+    if metadata_cols:
+        return df[metadata_cols].copy()
+    return pd.DataFrame(index=df.index)
+
+
 def prepare_inference_features(df: pd.DataFrame) -> pd.DataFrame:
     """Valida y prepara las características crudas para el pipeline entrenado.
 
@@ -313,38 +333,60 @@ def apply_training_transformations(
     return None
 
 
-def generate_predictions(pipeline: BaseEstimator, X: pd.DataFrame) -> pd.DataFrame:
+def generate_predictions(
+    pipeline: BaseEstimator,
+    X: pd.DataFrame,
+    metadata: pd.DataFrame | None = None,
+) -> pd.DataFrame:
     """Genera predicciones, etiquetas y probabilidades para los datos de entrada.
 
     Args:
         pipeline: Pipeline entrenado.
         X: Características preparadas.
+        metadata: DataFrame opcional con metadatos identificadores (p. ej. patient_id, event_time)
+            para asociar a cada predicción.
 
     Returns:
-        DataFrame con las características originales más las columnas de predicción.
+        DataFrame con los metadatos, características originales y columnas de predicción.
 
     Raises:
-        InferencePipelineError: Si el pipeline no puede generar predicciones.
+        InferencePipelineError: Si el pipeline no puede generar predicciones o probabilidades.
     """
     logger.info(f"Generando predicciones para {len(X)} muestras...")
     try:
         predictions = np.asarray(pipeline.predict(X))
+        probabilities: np.ndarray | None = None
+        classes = list(getattr(pipeline, "classes_", []))
+        if hasattr(pipeline, "predict_proba"):
+            probabilities = np.asarray(pipeline.predict_proba(X))
     except Exception as exc:
-        msg = f"Error al generar predicciones con el modelo cargado: {exc}"
+        msg = f"Error al generar predicciones o probabilidades con el modelo cargado: {exc}"
         logger.exception(msg)
         raise InferencePipelineError(msg) from exc
 
     result = X.copy()
+    if metadata is not None and not metadata.empty:
+        for column in reversed(metadata.columns):
+            if column not in result.columns:
+                result.insert(0, column, metadata[column].to_numpy())
+
     result["prediction"] = predictions
     result["prediction_label"] = [LABEL_NAMES.get(int(value), str(value)) for value in predictions]
 
-    classes = list(getattr(pipeline, "classes_", []))
-    if hasattr(pipeline, "predict_proba"):
-        probabilities = np.asarray(pipeline.predict_proba(X))
-        positive_index = classes.index(1) if 1 in classes else -1
-        negative_index = classes.index(0) if 0 in classes else -1
-        result["probability_disease"] = probabilities[:, positive_index]
-        result["probability_no_disease"] = probabilities[:, negative_index]
+    if probabilities is not None:
+        try:
+            positive_index = classes.index(1) if 1 in classes else -1
+            negative_index = classes.index(0) if 0 in classes else -1
+            result["probability_disease"] = (
+                probabilities[:, positive_index] if positive_index != -1 else np.nan
+            )
+            result["probability_no_disease"] = (
+                probabilities[:, negative_index] if negative_index != -1 else np.nan
+            )
+        except Exception as exc:
+            msg = f"Error al indexar las probabilidades calculadas por el modelo: {exc}"
+            logger.exception(msg)
+            raise InferencePipelineError(msg) from exc
     else:
         logger.warning("El modelo no implementa predict_proba(); no se generan probabilidades.")
         result["probability_disease"] = np.nan
@@ -401,10 +443,11 @@ def plot_prediction_distribution(predictions: pd.DataFrame, output_path: Path) -
         fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
         counts = predictions["prediction_label"].value_counts()
+        color_map = {"sano": "#10b981", "enfermo": "#ef4444"}
         axes[0].bar(
             counts.index.astype(str),
             counts.to_numpy(),
-            color=["#10b981", "#ef4444"][: len(counts)],
+            color=[color_map.get(str(label), "#6b7280") for label in counts.index],
         )
         axes[0].set_title("Distribución de predicciones")
         axes[0].set_xlabel("Diagnóstico predicho")
@@ -570,7 +613,9 @@ def run_inference_pipeline(
         Diccionario con el resumen de la ejecución y las rutas de los artefactos.
     """
     logger.info("=== Iniciando Inference Pipeline ===")
-    target_output_dir = output_dir or DEFAULT_PREDICTIONS_DIR
+    target_output_dir = output_dir or (
+        output_path.parent if output_path else DEFAULT_PREDICTIONS_DIR
+    )
     target_input = input_data_path or DEFAULT_INPUT_DATA_PATH
     target_output = output_path or target_output_dir / "predictions.parquet"
 
@@ -581,13 +626,14 @@ def run_inference_pipeline(
     # 2. Lectura de datos nuevos
     raw_data = load_input_data(target_input)
 
-    # 3. Aplicación de las transformaciones usadas en entrenamiento
+    # 3. Preparación de características y preservación de metadatos de identificación
+    metadata = extract_metadata(raw_data)
     features = prepare_inference_features(raw_data)
     transformed = apply_training_transformations(pipeline, features)
     transformed_shape = list(getattr(transformed, "shape", [])) or None
 
     # 4. Generación de predicciones
-    predictions = generate_predictions(pipeline, features)
+    predictions = generate_predictions(pipeline, features, metadata=metadata)
 
     # 5. Almacenamiento y visualización
     predictions_path = save_predictions(predictions, target_output)

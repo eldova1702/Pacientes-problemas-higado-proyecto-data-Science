@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import joblib
 import numpy as np
@@ -19,6 +20,7 @@ from src.pipelines.inference_pipeline.inference_pipeline import (
     InferencePipelineError,
     apply_training_transformations,
     build_portable_summary,
+    extract_metadata,
     generate_inference_html_report,
     generate_predictions,
     load_input_data,
@@ -479,3 +481,75 @@ def test_real_trained_model_inference(synthetic_raw_dataframe: pd.DataFrame) -> 
     assert transformed.shape[0] == len(features)
     assert len(predictions) == len(features)
     assert set(predictions["prediction"].unique()).issubset({0, 1})
+
+
+def test_extract_metadata_and_preservation_in_predictions(
+    dummy_pipeline: Pipeline, synthetic_raw_dataframe: pd.DataFrame
+) -> None:
+    """Verifica que los metadatos de identificación se extraigan y se asocien a las predicciones."""
+    metadata = extract_metadata(synthetic_raw_dataframe)
+    assert "patient_id" in metadata.columns
+    assert "event_time" in metadata.columns
+
+    features = prepare_inference_features(synthetic_raw_dataframe)
+    predictions = generate_predictions(dummy_pipeline, features, metadata=metadata)
+
+    assert "patient_id" in predictions.columns
+    assert "event_time" in predictions.columns
+    assert (
+        predictions["patient_id"].to_numpy() == synthetic_raw_dataframe["patient_id"].to_numpy()
+    ).all()
+
+
+def test_generate_predictions_raises_on_predict_proba_failure(
+    synthetic_raw_dataframe: pd.DataFrame,
+) -> None:
+    """Verifica que un fallo dentro de predict_proba lance InferencePipelineError."""
+
+    class BrokenProbabilitiesEstimator(DummyClassifier):
+        def predict_proba(self, X: Any) -> Any:
+            raise RuntimeError("Fallo forzado en predict_proba")
+
+    features = prepare_inference_features(synthetic_raw_dataframe)
+    model = BrokenProbabilitiesEstimator(strategy="prior")
+    model.fit(features, np.ones(len(features)))
+
+    with pytest.raises(
+        InferencePipelineError, match="Error al generar predicciones o probabilidades"
+    ):
+        generate_predictions(model, features)
+
+
+def test_plot_prediction_distribution_color_consistency(
+    tmp_path: Path, dummy_pipeline: Pipeline, synthetic_raw_dataframe: pd.DataFrame
+) -> None:
+    """Verifica que la generación de gráficos use asignación semántica de colores."""
+    features = prepare_inference_features(synthetic_raw_dataframe)
+    predictions = generate_predictions(dummy_pipeline, features)
+    figure_path = tmp_path / "images" / "dist.png"
+
+    result = plot_prediction_distribution(predictions, figure_path)
+    assert result is not None
+    assert figure_path.exists()
+
+
+def test_run_inference_pipeline_output_path_derives_output_dir(
+    tmp_path: Path,
+    dummy_model_path: Path,
+    synthetic_raw_dataframe: pd.DataFrame,
+) -> None:
+    """Verifica que pasar solo output_path guarde todos los artefactos en su directorio contenedor."""
+    input_path = tmp_path / "patients.parquet"
+    synthetic_raw_dataframe.to_parquet(input_path)
+    custom_output = tmp_path / "custom_dir" / "my_preds.parquet"
+
+    result = run_inference_pipeline(
+        model_path=dummy_model_path,
+        input_data_path=input_path,
+        output_path=custom_output,
+    )
+
+    assert Path(result["predictions_path"]) == custom_output
+    assert (custom_output.parent / "inference_summary.json").exists()
+    assert (custom_output.parent / "inference_report.html").exists()
+    assert (custom_output.parent / "images" / "prediction_distribution.png").exists()

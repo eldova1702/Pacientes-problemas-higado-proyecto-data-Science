@@ -2,7 +2,7 @@
     "status": "success",
     "model_path": "models/liver_patient_model/model.joblib",
     "model_type": "logistic_regression",
-    "input_data_path": "data/01_raw/Pacientes_porblemas_higado_india.csv",
+    "input_data_path": "data/02_intermediate/pacientes_higado_exploracion.parquet",
     "n_samples": 663,
     "positive_predictions": 343,
     "negative_predictions": 320,
