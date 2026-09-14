@@ -31,13 +31,7 @@ from sklearn.base import BaseEstimator
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    balanced_accuracy_score,
     confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
     roc_auc_score,
     roc_curve,
 )
@@ -57,6 +51,11 @@ from src.data.feature_store import (  # noqa: E402
 )
 from src.data.split_validation import (  # noqa: E402
     validate_train_test_split,
+)
+from src.model.model_validation import (  # noqa: E402
+    DEFAULT_CV_FOLDS,
+    compute_split_metrics,
+    validate_model_performance,
 )
 from src.model.preprocessing import (  # noqa: E402
     build_feature_pipeline,
@@ -340,31 +339,21 @@ def evaluate_model(
         Diccionario con las métricas de rendimiento evaluadas.
     """
     logger.info("Evaluando el modelo en el conjunto de prueba...")
+    base_metrics = compute_split_metrics(pipeline, X_test, y_test)
     y_pred = pipeline.predict(X_test)
-
-    # Probabilidades para ROC-AUC
-    y_prob = pipeline.predict_proba(X_test)[:, 1] if hasattr(pipeline, "predict_proba") else y_pred
-
-    acc = float(accuracy_score(y_test, y_pred))
-    bal_acc = float(balanced_accuracy_score(y_test, y_pred))
-    prec = float(precision_score(y_test, y_pred, zero_division=0))
-    rec = float(recall_score(y_test, y_pred, zero_division=0))
-    f1 = float(f1_score(y_test, y_pred, zero_division=0))
-    roc_auc = float(roc_auc_score(y_test, y_prob))
-    avg_prec = float(average_precision_score(y_test, y_prob))
     cm = confusion_matrix(y_test, y_pred).tolist()
 
     metrics = {
-        "accuracy": round(acc, 4),
-        "balanced_accuracy": round(bal_acc, 4),
-        "precision": round(prec, 4),
-        "recall": round(rec, 4),
-        "f1_score": round(f1, 4),
-        "roc_auc": round(roc_auc, 4),
-        "average_precision": round(avg_prec, 4),
+        "accuracy": base_metrics["accuracy"],
+        "balanced_accuracy": base_metrics["balanced_accuracy"],
+        "precision": base_metrics["precision"],
+        "recall": base_metrics["recall"],
+        "f1_score": base_metrics["f1_score"],
+        "roc_auc": base_metrics["roc_auc"],
+        "average_precision": base_metrics["average_precision"],
         "confusion_matrix": cm,
-        "test_samples": len(y_test),
-        "test_positive_ratio": round(float(y_test.mean()), 4),
+        "test_samples": base_metrics["n_samples"],
+        "test_positive_ratio": base_metrics["positive_ratio"],
     }
 
     logger.info("Métricas de evaluación obtenidas:")
@@ -594,6 +583,9 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
     dry_run: bool = False,
     fail_on_split_validation: bool = False,
     skip_split_validation: bool = False,
+    cv_folds: int = DEFAULT_CV_FOLDS,
+    fail_on_model_validation: bool = False,
+    skip_model_validation: bool = False,
     api_key: str | None = None,
     project_name: str | None = None,
 ) -> dict[str, Any]:
@@ -614,6 +606,9 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         dry_run: Si es True, ejecuta en modo local sin llamadas de red a Hopsworks.
         fail_on_split_validation: Si es True, lanza excepción si la validación de partición falla.
         skip_split_validation: Si es True, omite la validación de partición train/test.
+        cv_folds: Número de folds para la validación cruzada del modelo.
+        fail_on_model_validation: Si es True, lanza excepción si la validación del modelo falla.
+        skip_model_validation: Si es True, omite la validación de rendimiento del modelo.
         api_key: Llave API de Hopsworks.
         project_name: Nombre de proyecto de Hopsworks.
 
@@ -669,6 +664,21 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
     metrics["model_type"] = model_type
     metrics["train_samples"] = len(X_train)
 
+    # 4.1 Validación de rendimiento y generalización (validación cruzada + over/underfitting)
+    model_validation_results = None
+    if not skip_model_validation:
+        model_validation_results = validate_model_performance(
+            pipeline=trained_pipeline,
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            cv_folds=cv_folds,
+            random_state=random_state,
+            raise_on_error=fail_on_model_validation,
+            output_dir=target_output_dir,
+        )
+
     # 5. Generación de imágenes y almacenamiento de artefactos
     saved_paths = save_model_artifacts(
         pipeline=trained_pipeline,
@@ -707,6 +717,7 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         "saved_paths": saved_paths,
         "hopsworks_model_version": hw_model_version,
         "split_validation": split_validation_results,
+        "model_validation": model_validation_results,
     }
 
     logger.info(f"=== Training Pipeline Finalizado ({result['status']}) ===")
@@ -793,6 +804,22 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Omite la verificación de separación train/test.",
     )
+    parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=DEFAULT_CV_FOLDS,
+        help=f"Número de folds de validación cruzada (por defecto: {DEFAULT_CV_FOLDS}).",
+    )
+    parser.add_argument(
+        "--fail-on-model-validation",
+        action="store_true",
+        help="Detiene la ejecución con error si la validación del modelo falla.",
+    )
+    parser.add_argument(
+        "--skip-model-validation",
+        action="store_true",
+        help="Omite la validación de rendimiento y generalización del modelo.",
+    )
     return parser.parse_args(args)
 
 
@@ -816,6 +843,9 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             fail_on_split_validation=args.fail_on_split_validation,
             skip_split_validation=args.skip_split_validation,
+            cv_folds=args.cv_folds,
+            fail_on_model_validation=args.fail_on_model_validation,
+            skip_model_validation=args.skip_model_validation,
         )
         logger.info(f"Resultado del Training Pipeline: {result['status']}")
     except Exception:

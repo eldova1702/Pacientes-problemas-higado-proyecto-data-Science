@@ -8,6 +8,12 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.model.model_validation import (  # noqa: E402
+    DEFAULT_CV_FOLDS,
+    ModelValidationError,
+    cross_validate_model,
+    validate_model_performance,
+)
 from src.pipelines.training_pipeline.train_pipeline import (  # noqa: E402
     DEFAULT_FEATURE_GROUP_NAME,
     DEFAULT_FEATURE_GROUP_VERSION,
@@ -25,12 +31,15 @@ from src.pipelines.training_pipeline.train_pipeline import (  # noqa: E402
 )
 
 __all__ = [
+    "DEFAULT_CV_FOLDS",
     "DEFAULT_FEATURE_GROUP_NAME",
     "DEFAULT_FEATURE_GROUP_VERSION",
     "DEFAULT_FEATURE_VIEW_NAME",
     "DEFAULT_MODEL_DIR",
     "DEFAULT_MODEL_TYPE",
+    "ModelValidationError",
     "build_training_pipeline",
+    "cross_validate_model",
     "evaluate_model",
     "fetch_training_data",
     "main",
@@ -38,6 +47,7 @@ __all__ = [
     "save_model_artifacts",
     "split_training_data",
     "train_model",
+    "validate_model_performance",
 ]
 
 if __name__ == "__main__":

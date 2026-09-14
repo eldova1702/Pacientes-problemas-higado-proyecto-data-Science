@@ -1,0 +1,191 @@
+{
+    "status": "passed",
+    "passed": true,
+    "summary": {
+        "cv_folds": 5,
+        "primary_metric": "balanced_accuracy",
+        "train_score": 0.708,
+        "cv_score": 0.6953,
+        "test_score": 0.7479,
+        "diagnosis": "good_fit",
+        "checks_passed": 2,
+        "checks_warning": 0,
+        "checks_failed": 0
+    },
+    "cross_validation": {
+        "cv_folds": 5,
+        "splitter": "StratifiedKFold",
+        "random_state": 42,
+        "metrics": {
+            "accuracy": {
+                "mean": 0.666,
+                "std": 0.0334,
+                "min": 0.6277,
+                "max": 0.7234,
+                "train_mean": 0.6713,
+                "train_std": 0.0117,
+                "fold_values": [
+                    0.6809,
+                    0.6489,
+                    0.6277,
+                    0.6489,
+                    0.7234
+                ]
+            },
+            "balanced_accuracy": {
+                "mean": 0.6953,
+                "std": 0.0408,
+                "min": 0.6282,
+                "max": 0.7413,
+                "train_mean": 0.7046,
+                "train_std": 0.0189,
+                "fold_values": [
+                    0.7319,
+                    0.6763,
+                    0.6282,
+                    0.6986,
+                    0.7413
+                ]
+            },
+            "precision": {
+                "mean": 0.8683,
+                "std": 0.0352,
+                "min": 0.8077,
+                "max": 0.9111,
+                "train_mean": 0.8762,
+                "train_std": 0.0184,
+                "fold_values": [
+                    0.9111,
+                    0.8542,
+                    0.8077,
+                    0.8837,
+                    0.8846
+                ]
+            },
+            "recall": {
+                "mean": 0.6247,
+                "std": 0.0399,
+                "min": 0.5758,
+                "max": 0.697,
+                "train_mean": 0.6246,
+                "train_std": 0.0063,
+                "fold_values": [
+                    0.6119,
+                    0.6119,
+                    0.6269,
+                    0.5758,
+                    0.697
+                ]
+            },
+            "f1_score": {
+                "mean": 0.7256,
+                "std": 0.0294,
+                "min": 0.6972,
+                "max": 0.7797,
+                "train_mean": 0.7292,
+                "train_std": 0.0076,
+                "fold_values": [
+                    0.7321,
+                    0.713,
+                    0.7059,
+                    0.6972,
+                    0.7797
+                ]
+            },
+            "roc_auc": {
+                "mean": 0.7358,
+                "std": 0.0373,
+                "min": 0.6943,
+                "max": 0.8014,
+                "train_mean": 0.7613,
+                "train_std": 0.0089,
+                "fold_values": [
+                    0.7452,
+                    0.7308,
+                    0.6943,
+                    0.7073,
+                    0.8014
+                ]
+            },
+            "average_precision": {
+                "mean": 0.8825,
+                "std": 0.0273,
+                "min": 0.8511,
+                "max": 0.9219,
+                "train_mean": 0.8929,
+                "train_std": 0.0058,
+                "fold_values": [
+                    0.8982,
+                    0.8888,
+                    0.8511,
+                    0.8524,
+                    0.9219
+                ]
+            }
+        }
+    },
+    "train_metrics": {
+        "n_samples": 470,
+        "positive_ratio": 0.7085,
+        "accuracy": 0.6745,
+        "balanced_accuracy": 0.708,
+        "precision": 0.8782,
+        "recall": 0.6276,
+        "f1_score": 0.732,
+        "roc_auc": 0.7584,
+        "average_precision": 0.8921
+    },
+    "test_metrics": {
+        "n_samples": 118,
+        "positive_ratio": 0.7119,
+        "accuracy": 0.7034,
+        "balanced_accuracy": 0.7479,
+        "precision": 0.9153,
+        "recall": 0.6429,
+        "f1_score": 0.7552,
+        "roc_auc": 0.8162,
+        "average_precision": 0.9164
+    },
+    "fit_analysis": {
+        "primary_metric": "balanced_accuracy",
+        "train_score": 0.708,
+        "cv_score": 0.6953,
+        "cv_std": 0.0408,
+        "test_score": 0.7479,
+        "gap_train_cv": 0.0127,
+        "gap_cv_test": -0.0526,
+        "gap_train_test": -0.0399,
+        "diagnosis": "good_fit",
+        "status": "passed",
+        "observations": [
+            "Métrica principal 'balanced_accuracy': train=0.7080, CV=0.6953 ± 0.0408, test=0.7479.",
+            "Brecha train-CV=+0.0127, CV-test=-0.0526, train-test=-0.0399."
+        ],
+        "recommendations": [
+            "Mantener la configuración actual y monitorear el rendimiento en producción.",
+            "Registrar métricas y reentrenar periódicamente con nuevos datos."
+        ],
+        "message": "El modelo generaliza correctamente: no se detectan brechas significativas entre train, validación cruzada y test."
+    },
+    "checks": {
+        "fit_quality": {
+            "status": "passed",
+            "diagnosis": "good_fit",
+            "message": "El modelo generaliza correctamente: no se detectan brechas significativas entre train, validación cruzada y test."
+        },
+        "cv_stability": {
+            "status": "passed",
+            "message": "Validación cruzada estable (std=0.0408)."
+        }
+    },
+    "warnings": [],
+    "errors": [],
+    "report_paths": {
+        "json": "C:\\Users\\dova1\\Pacientes-problemas-higado-proyecto-data-Science\\models\\liver_patient_model\\model_validation_report.json",
+        "html": "C:\\Users\\dova1\\Pacientes-problemas-higado-proyecto-data-Science\\models\\liver_patient_model\\model_validation_report.html"
+    },
+    "generated_figures": [
+        "C:\\Users\\dova1\\Pacientes-problemas-higado-proyecto-data-Science\\models\\liver_patient_model\\images\\train_cv_test_metrics.png",
+        "C:\\Users\\dova1\\Pacientes-problemas-higado-proyecto-data-Science\\models\\liver_patient_model\\images\\learning_curve.png"
+    ]
+}
