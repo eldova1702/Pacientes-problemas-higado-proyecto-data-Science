@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Train/Test Split Validation Report</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 30px; color: #111827; }
+        .card { max-width: 800px; margin: 0 auto; background: white; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e5e7eb; padding-bottom: 16px; margin-bottom: 20px; }
+        h1 { margin: 0; font-size: 20px; color: #111827; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <div>
+                <h1>Train/Test Split Validation Report</h1>
+                <small style="color: #6b7280;">Detección de Data Leakage y Distribuciones Clínicas</small>
+            </div>
+            <span style="background: #10b981; color: white; padding: 6px 14px; border-radius: 20px; font-weight: bold; text-transform: uppercase; font-size: 14px;">
+                passed
+            </span>
+        </div>
+        <div class="checks">
+            
+        <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid #10b981; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 15px; color: #1f2937;">Index Leakage</strong>
+                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">passed</span>
+            </div>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">Sin fuga de índices: Los índices de train y test son disjuntos.</p>
+        </div>
+        
+        <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid #10b981; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 15px; color: #1f2937;">Sample Leakage</strong>
+                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">passed</span>
+            </div>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">Sin mezcla de muestras: No hay filas de test duplicadas en entrenamiento.</p>
+        </div>
+        
+        <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid #10b981; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 15px; color: #1f2937;">Dataset Sizes</strong>
+                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">passed</span>
+            </div>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">Proporción de tamaños adecuada: Train=470, Test=118 (20.1%).</p>
+        </div>
+        
+        <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid #10b981; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 15px; color: #1f2937;">New Categories</strong>
+                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">passed</span>
+            </div>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">Sin nuevas categorías: Todos los niveles categóricos de test están presentes en train.</p>
+        </div>
+        
+        <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid #10b981; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 15px; color: #1f2937;">Label Drift</strong>
+                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">passed</span>
+            </div>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">Distribución de clases consistente: Train pos=70.9%, Test pos=71.2% (diff=0.3%).</p>
+        </div>
+        
+        <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid #10b981; background: #f9fafb; border-radius: 4px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <strong style="font-size: 15px; color: #1f2937;">Feature Drift</strong>
+                <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">passed</span>
+            </div>
+            <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">Sin feature drift relevante: 9/9 variables presentan distribuciones homogéneas (alpha=0.05).</p>
+        </div>
+        
+        </div>
+    </div>
+</body>
+</html>

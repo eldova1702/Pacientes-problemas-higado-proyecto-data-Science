@@ -55,6 +55,9 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.data.feature_store import (  # noqa: E402
     get_hopsworks_project,
 )
+from src.data.split_validation import (  # noqa: E402
+    validate_train_test_split,
+)
 from src.model.preprocessing import (  # noqa: E402
     build_feature_pipeline,
     prepare_supervised_data,
@@ -589,6 +592,8 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
     output_dir: Path | None = None,
     register_hopsworks: bool = True,
     dry_run: bool = False,
+    fail_on_split_validation: bool = False,
+    skip_split_validation: bool = False,
     api_key: str | None = None,
     project_name: str | None = None,
 ) -> dict[str, Any]:
@@ -607,6 +612,8 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         output_dir: Directorio para almacenar artefactos de salida.
         register_hopsworks: Si es True, registra en Hopsworks Model Registry.
         dry_run: Si es True, ejecuta en modo local sin llamadas de red a Hopsworks.
+        fail_on_split_validation: Si es True, lanza excepción si la validación de partición falla.
+        skip_split_validation: Si es True, omite la validación de partición train/test.
         api_key: Llave API de Hopsworks.
         project_name: Nombre de proyecto de Hopsworks.
 
@@ -638,6 +645,20 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         test_size=test_size,
         random_state=random_state,
     )
+
+    # 2.1 Verificación de separación train/test (detección de leakage y drift)
+    split_validation_results = None
+    if not skip_split_validation:
+        split_validation_results = validate_train_test_split(
+            X_train=X_train,
+            X_test=X_test,
+            y_train=y_train,
+            y_test=y_test,
+            target_col="diagnosis",
+            expected_test_ratio=test_size,
+            raise_on_error=fail_on_split_validation,
+            output_dir=target_output_dir,
+        )
 
     # 3. Construcción del pipeline y entrenamiento
     pipeline = build_training_pipeline(model_type=model_type, random_state=random_state)
@@ -685,7 +706,9 @@ def run_training_pipeline(  # noqa: PLR0913, PLR0917
         "metrics": metrics,
         "saved_paths": saved_paths,
         "hopsworks_model_version": hw_model_version,
+        "split_validation": split_validation_results,
     }
+
     logger.info(f"=== Training Pipeline Finalizado ({result['status']}) ===")
     return result
 
@@ -760,6 +783,16 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Modo simulación: entrena localmente sin conectar a Hopsworks.",
     )
+    parser.add_argument(
+        "--fail-on-split-validation",
+        action="store_true",
+        help="Detiene la ejecución con error si la verificación de separación train/test falla.",
+    )
+    parser.add_argument(
+        "--skip-split-validation",
+        action="store_true",
+        help="Omite la verificación de separación train/test.",
+    )
     return parser.parse_args(args)
 
 
@@ -781,6 +814,8 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output_dir,
             register_hopsworks=not args.no_hopsworks_registry and not args.dry_run,
             dry_run=args.dry_run,
+            fail_on_split_validation=args.fail_on_split_validation,
+            skip_split_validation=args.skip_split_validation,
         )
         logger.info(f"Resultado del Training Pipeline: {result['status']}")
     except Exception:
