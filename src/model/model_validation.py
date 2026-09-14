@@ -337,7 +337,9 @@ def plot_train_cv_test_metrics(
         return None
 
     train_values = [train_metrics.get(name, np.nan) for name in metrics]
-    cv_values = [cv_results.get("metrics", {}).get(name, {}).get("mean", np.nan) for name in metrics]
+    cv_values = [
+        cv_results.get("metrics", {}).get(name, {}).get("mean", np.nan) for name in metrics
+    ]
     test_values = [test_metrics.get(name, np.nan) for name in metrics]
 
     try:
@@ -730,9 +732,8 @@ def validate_model_performance(  # noqa: C901, PLR0912, PLR0913, PLR0915, PLR091
             result["report_paths"].pop("json", None)
 
     if raise_on_error and errors:
-        msg = (
-            f"Fallo en la validación del modelo ({len(errors)} errores detectados): "
-            + "; ".join(errors)
+        msg = f"Fallo en la validación del modelo ({len(errors)} errores detectados): " + "; ".join(
+            errors
         )
         raise ModelValidationError(msg)
 

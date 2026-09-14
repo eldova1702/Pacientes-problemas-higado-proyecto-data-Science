@@ -87,7 +87,14 @@ def test_cross_validate_model_returns_metrics(
 
     assert res["cv_folds"] == EXPECTED_CV_FOLDS
     assert res["splitter"] == "StratifiedKFold"
-    expected_metrics = {"accuracy", "balanced_accuracy", "precision", "recall", "f1_score", "roc_auc"}
+    expected_metrics = {
+        "accuracy",
+        "balanced_accuracy",
+        "precision",
+        "recall",
+        "f1_score",
+        "roc_auc",
+    }
     assert expected_metrics.issubset(res["metrics"].keys())
 
     for data in res["metrics"].values():
