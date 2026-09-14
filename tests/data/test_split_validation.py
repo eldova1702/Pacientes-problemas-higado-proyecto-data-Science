@@ -104,10 +104,11 @@ def test_check_sample_leakage_detected(
     """Detecta mezcla de muestras cuando se duplican filas de test en train."""
     X_train, X_test, _, _ = clean_train_test_data
     # Inyectar muestras idénticas de test dentro de train
-    X_train_contaminated = pd.concat([X_train, X_test.iloc[:15]])
+    injected_count = 15
+    X_train_contaminated = pd.concat([X_train, X_test.iloc[:injected_count]])
 
     res = check_sample_leakage(X_train_contaminated, X_test)
-    assert res["duplicate_count"] >= 15
+    assert res["duplicate_count"] >= injected_count
     assert res["status"] in ("warning", "failed")
 
 
@@ -116,12 +117,15 @@ def test_check_dataset_sizes_valid(
 ) -> None:
     """Verifica proporciones de tamaño estándar (200 train, 50 test = 20%)."""
     X_train, X_test, _, _ = clean_train_test_data
-    res = check_dataset_sizes(X_train, X_test, expected_test_ratio=0.20)
+    expected_ratio = 0.20
+    expected_train_size = 200
+    expected_test_size = 50
+    res = check_dataset_sizes(X_train, X_test, expected_test_ratio=expected_ratio)
 
     assert res["status"] == "passed"
-    assert res["train_size"] == 200
-    assert res["test_size"] == 50
-    assert res["actual_test_ratio"] == 0.20
+    assert res["train_size"] == expected_train_size
+    assert res["test_size"] == expected_test_size
+    assert res["actual_test_ratio"] == expected_ratio
 
 
 def test_check_dataset_sizes_empty() -> None:

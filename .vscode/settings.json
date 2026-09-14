@@ -39,6 +39,9 @@
     "editor.defaultFormatter": "vscode.json-language-features"
   },
   "python.defaultInterpreterPath": "${workspaceFolder}/.venv",
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}"
+  ],
   "markdownlint.config": {
     "MD007": {"indent": 4}
   },

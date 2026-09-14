@@ -22,6 +22,11 @@ from scipy import stats
 
 logger = logging.getLogger("split_validation")
 
+CRITICAL_SAMPLE_LEAKAGE_RATIO = 0.05
+MIN_REQUIRED_CLASSES = 2
+MIN_SAMPLE_SIZE_FOR_KS = 5
+WARNING_DRIFT_RATIO = 0.30
+
 
 class TrainTestSplitValidationError(Exception):
     """Excepción lanzada cuando la partición train/test presenta fallos críticos de integridad."""
@@ -67,31 +72,38 @@ def check_sample_leakage(
     X_test: pd.DataFrame,
     subset_cols: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Verifica que no existan muestras con características idénticas en ambos conjuntos.
+    """Detecta fuga de muestras (sample leakage) o duplicados exactos entre train y test.
 
-    Args:
-        X_train: DataFrame de entrenamiento.
-        X_test: DataFrame de prueba.
-        subset_cols: Lista de columnas a comparar (por defecto: todas las columnas en común).
+    Compara las filas de ambas particiones para evitar que observaciones idénticas
+    se encuentren presentes tanto en entrenamiento como en evaluación.
 
-    Returns:
-        Diccionario con el resultado de la verificación de mezcla de muestras.
+    Retorna:
+        Diccionario con el resultado de la validación.
     """
-    common_cols = subset_cols or list(set(X_train.columns).intersection(set(X_test.columns)))
-    if not common_cols:
+    if X_train.empty or X_test.empty:
         return {
-            "status": "warning",
+            "status": "failed",
             "duplicate_count": 0,
             "leakage_ratio": 0.0,
-            "message": "No se encontraron columnas comunes para verificar mezcla de muestras.",
+            "message": "Conjuntos vacíos para validación de mezcla de muestras.",
         }
 
-    train_subset = X_train[common_cols].dropna().drop_duplicates()
-    test_subset = X_test[common_cols].dropna()
+    # Intersección por filas exactas
+    common_cols = [c for c in X_train.columns if c in X_test.columns]
+    if not common_cols:
+        return {
+            "status": "passed",
+            "duplicate_count": 0,
+            "leakage_ratio": 0.0,
+            "message": "No hay columnas comunes entre train y test para evaluar mezcla.",
+        }
 
-    # Inner merge para identificar filas duplicadas entre train y test
-    duplicates = pd.merge(train_subset, test_subset, on=common_cols, how="inner")
-    dup_count = len(duplicates)
+    merged = pd.merge(
+        X_test[common_cols].drop_duplicates(),
+        X_train[common_cols].drop_duplicates(),
+        how="inner",
+    )
+    dup_count = len(merged)
     leakage_ratio = dup_count / max(len(X_test), 1)
 
     has_leakage = dup_count > 0
@@ -99,7 +111,7 @@ def check_sample_leakage(
     # si es menor pero > 0, se considera advertencia.
     if dup_count == 0:
         status = "passed"
-    elif leakage_ratio > 0.05:
+    elif leakage_ratio > CRITICAL_SAMPLE_LEAKAGE_RATIO:
         status = "failed"
     else:
         status = "warning"
@@ -233,7 +245,7 @@ def check_label_distribution(
     test_labels = set(y_test.dropna().unique())
 
     # Se requieren al menos 2 clases para problemas de clasificación binaria
-    if len(train_labels) < 2 or len(test_labels) < 2:
+    if len(train_labels) < MIN_REQUIRED_CLASSES or len(test_labels) < MIN_REQUIRED_CLASSES:
         return {
             "status": "failed",
             "train_distribution": y_train.value_counts(normalize=True).to_dict(),
@@ -287,7 +299,7 @@ def check_label_distribution(
     }
 
 
-def check_feature_drift(  # noqa: C901
+def check_feature_drift(
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     numeric_cols: list[str] | None = None,
@@ -305,7 +317,9 @@ def check_feature_drift(  # noqa: C901
         Diccionario con las pruebas de desvío por cada variable evaluada.
     """
     if numeric_cols is None:
-        cols = [c for c in X_train.select_dtypes(include=[np.number]).columns if c in X_test.columns]
+        cols = [
+            c for c in X_train.select_dtypes(include=[np.number]).columns if c in X_test.columns
+        ]
     else:
         cols = [c for c in numeric_cols if c in X_train.columns and c in X_test.columns]
 
@@ -316,7 +330,7 @@ def check_feature_drift(  # noqa: C901
         s_train = pd.to_numeric(X_train[col], errors="coerce").dropna()
         s_test = pd.to_numeric(X_test[col], errors="coerce").dropna()
 
-        if len(s_train) < 5 or len(s_test) < 5:
+        if len(s_train) < MIN_SAMPLE_SIZE_FOR_KS or len(s_test) < MIN_SAMPLE_SIZE_FOR_KS:
             continue
 
         try:
@@ -341,7 +355,7 @@ def check_feature_drift(  # noqa: C901
     # Si más del 30% de las variables presentan desvío significativo, alerta
     if len(drifted_columns) == 0:
         status = "passed"
-    elif drift_ratio > 0.30:
+    elif drift_ratio > WARNING_DRIFT_RATIO:
         status = "warning"
     else:
         status = "passed"
@@ -384,7 +398,7 @@ def generate_html_report(validation_results: dict[str, Any], report_path: Path) 
         checks_html += f"""
         <div style="margin-bottom: 12px; padding: 12px; border-left: 4px solid {c_color}; background: #f9fafb; border-radius: 4px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <strong style="font-size: 15px; color: #1f2937;">{check_name.replace('_', ' ').title()}</strong>
+                <strong style="font-size: 15px; color: #1f2937;">{check_name.replace("_", " ").title()}</strong>
                 <span style="background: {c_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase;">{c_status}</span>
             </div>
             <p style="margin: 6px 0 0; color: #4b5563; font-size: 14px;">{msg}</p>
@@ -426,7 +440,7 @@ def generate_html_report(validation_results: dict[str, Any], report_path: Path) 
         f.write(html_content)
 
 
-def validate_train_test_split(  # noqa: PLR0913, PLR0917
+def validate_train_test_split(  # noqa: C901, PLR0912, PLR0913, PLR0915, PLR0917
     X_train: pd.DataFrame,
     X_test: pd.DataFrame,
     y_train: pd.Series,

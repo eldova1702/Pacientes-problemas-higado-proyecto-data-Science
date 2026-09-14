@@ -1,0 +1,114 @@
+{
+    "status": "passed",
+    "passed": true,
+    "summary": {
+        "total_checks": 6,
+        "checks_passed": 6,
+        "checks_warning": 0,
+        "checks_failed": 0
+    },
+    "checks": {
+        "index_leakage": {
+            "status": "passed",
+            "overlap_count": 0,
+            "leakage_ratio": 0.0,
+            "overlapping_indices": [],
+            "message": "Sin fuga de índices: Los índices de train y test son disjuntos."
+        },
+        "sample_leakage": {
+            "status": "passed",
+            "duplicate_count": 0,
+            "leakage_ratio": 0.0,
+            "message": "Sin mezcla de muestras: No hay filas de test duplicadas en entrenamiento."
+        },
+        "dataset_sizes": {
+            "status": "passed",
+            "train_size": 470,
+            "test_size": 118,
+            "total_samples": 588,
+            "actual_test_ratio": 0.2007,
+            "expected_test_ratio": 0.2,
+            "message": "Proporción de tamaños adecuada: Train=470, Test=118 (20.1%)."
+        },
+        "new_categories": {
+            "status": "passed",
+            "categorical_columns_checked": [
+                "Gender"
+            ],
+            "new_categories": {},
+            "message": "Sin nuevas categorías: Todos los niveles categóricos de test están presentes en train."
+        },
+        "label_drift": {
+            "status": "passed",
+            "train_positive_ratio": 0.7085,
+            "test_positive_ratio": 0.7119,
+            "proportion_difference": 0.0034,
+            "train_counts": {
+                "1": 333,
+                "0": 137
+            },
+            "test_counts": {
+                "1": 84,
+                "0": 34
+            },
+            "message": "Distribución de clases consistente: Train pos=70.9%, Test pos=71.2% (diff=0.3%)."
+        },
+        "feature_drift": {
+            "status": "passed",
+            "drifted_columns_count": 0,
+            "drifted_columns": [],
+            "total_numeric_columns": 9,
+            "features": {
+                "Age": {
+                    "statistic": 0.087,
+                    "p_value": 0.4435,
+                    "drift_detected": false
+                },
+                "Total_Bilirubin": {
+                    "statistic": 0.1149,
+                    "p_value": 0.1521,
+                    "drift_detected": false
+                },
+                "Direct_Bilirubin": {
+                    "statistic": 0.1096,
+                    "p_value": 0.1907,
+                    "drift_detected": false
+                },
+                "Alkaline_Phosphotase": {
+                    "statistic": 0.1366,
+                    "p_value": 0.0573,
+                    "drift_detected": false
+                },
+                "Alamine_Aminotransferase": {
+                    "statistic": 0.1052,
+                    "p_value": 0.2372,
+                    "drift_detected": false
+                },
+                "Aspartate_Aminotransferase": {
+                    "statistic": 0.0983,
+                    "p_value": 0.3114,
+                    "drift_detected": false
+                },
+                "Total_Protiens": {
+                    "statistic": 0.1078,
+                    "p_value": 0.2153,
+                    "drift_detected": false
+                },
+                "Albumin": {
+                    "statistic": 0.0906,
+                    "p_value": 0.3994,
+                    "drift_detected": false
+                },
+                "Albumin_and_Globulin_Ratio": {
+                    "statistic": 0.0772,
+                    "p_value": 0.5957,
+                    "drift_detected": false
+                }
+            },
+            "message": "Sin feature drift relevante: 9/9 variables presentan distribuciones homogéneas."
+        }
+    },
+    "warnings": [],
+    "errors": [],
+    "report_paths": {}
+}
