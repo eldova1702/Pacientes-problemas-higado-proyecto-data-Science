@@ -1,6 +1,16 @@
-"""Inference pipeline module for Indian Liver Patient Dataset classification."""
+"""Módulo puente/alias para ejecutar o importar inference_pipeline directamente desde src.pipelines."""
 
-from src.pipelines.inference_pipeline.inference_pipeline import (
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Permitir ejecución directa de este script
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from src.pipelines.inference_pipeline.inference_pipeline import (  # noqa: E402
     DEFAULT_INPUT_DATA_PATH,
     DEFAULT_MODEL_DIR,
     DEFAULT_MODEL_PATH,
@@ -39,3 +49,6 @@ __all__ = [
     "save_inference_summary",
     "save_predictions",
 ]
+
+if __name__ == "__main__":
+    sys.exit(main())
