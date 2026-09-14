@@ -13,6 +13,7 @@ import pandas as pd
 import pytest
 
 from src.data.split_validation import TrainTestSplitValidationError
+from src.model.model_validation import ModelValidationError
 from src.pipelines.training_pipeline.train_pipeline import (
     PROJECT_ROOT,
     build_training_pipeline,
@@ -30,6 +31,7 @@ from src.pipelines.training_pipeline.train_pipeline import (
 )
 
 MIN_EXPECTED_DIAGNOSTIC_PLOTS: int = 2
+EXPECTED_CV_FOLDS: int = 3
 
 
 @pytest.fixture
@@ -483,4 +485,68 @@ def test_training_pipeline_split_validation_skip_and_fail(
             output_dir=tmp_path / "out_fail",
             dry_run=True,
             fail_on_split_validation=True,
+        )
+
+
+def test_run_training_pipeline_model_validation_populated(
+    tmp_path: Path, sample_dataset: pd.DataFrame
+) -> None:
+    """La validación del modelo se ejecuta por defecto y queda en el resultado."""
+    local_data = tmp_path / "patients_model_val.parquet"
+    sample_dataset.to_parquet(local_data)
+    output_dir = tmp_path / "out_model_val"
+
+    result = run_training_pipeline(
+        local_data_path=local_data,
+        output_dir=output_dir,
+        dry_run=True,
+        cv_folds=3,
+    )
+
+    model_validation = result["model_validation"]
+    assert model_validation is not None
+    assert model_validation["summary"]["cv_folds"] == EXPECTED_CV_FOLDS
+    assert "cross_validation" in model_validation
+    assert "fit_analysis" in model_validation
+    assert (output_dir / "model_validation_report.json").exists()
+    assert (output_dir / "model_validation_report.html").exists()
+
+
+def test_run_training_pipeline_skip_model_validation(
+    tmp_path: Path, sample_dataset: pd.DataFrame
+) -> None:
+    """skip_model_validation=True omite la validación del modelo."""
+    local_data = tmp_path / "patients_skip_model_val.parquet"
+    sample_dataset.to_parquet(local_data)
+
+    result = run_training_pipeline(
+        local_data_path=local_data,
+        output_dir=tmp_path / "out_skip_model_val",
+        dry_run=True,
+        skip_model_validation=True,
+    )
+
+    assert result["model_validation"] is None
+
+
+def test_run_training_pipeline_fail_on_model_validation(
+    tmp_path: Path, sample_dataset: pd.DataFrame
+) -> None:
+    """fail_on_model_validation=True propaga el error controlado de validación del modelo."""
+    local_data = tmp_path / "patients_fail_model_val.parquet"
+    sample_dataset.to_parquet(local_data)
+
+    with (
+        patch(
+            "src.pipelines.training_pipeline.train_pipeline.validate_model_performance",
+            side_effect=ModelValidationError("Fallo simulado de generalización"),
+        ),
+        pytest.raises(ModelValidationError, match="Fallo simulado de generalización"),
+    ):
+        run_training_pipeline(
+            local_data_path=local_data,
+            output_dir=tmp_path / "out_fail_model_val",
+            dry_run=True,
+            skip_split_validation=True,
+            fail_on_model_validation=True,
         )
