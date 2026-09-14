@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from src.data.split_validation import TrainTestSplitValidationError
 from src.pipelines.training_pipeline.train_pipeline import (
     PROJECT_ROOT,
     build_training_pipeline,
@@ -328,6 +329,9 @@ def test_run_training_pipeline_dry_run(tmp_path: Path, sample_dataset: pd.DataFr
     assert result["model_type"] == "logistic_regression"
     assert "metrics" in result
     assert "saved_paths" in result
+    assert "split_validation" in result
+    assert result["split_validation"] is not None
+    assert result["split_validation"]["passed"] is True
     assert Path(result["saved_paths"]["model_path"]).exists()
 
 
@@ -445,3 +449,36 @@ def test_main_module_execution(tmp_path: Path, sample_dataset: pd.DataFrame) -> 
         runpy.run_path(str(alias_path), run_name="__main__")
     assert exc_info_alias.value.code == 0
     assert (out_dir_alias / "model.joblib").exists()
+
+
+def test_training_pipeline_split_validation_skip_and_fail(
+    tmp_path: Path, sample_dataset: pd.DataFrame
+) -> None:
+    """Verifica el comportamiento de skip_split_validation y fail_on_split_validation."""
+    local_data = tmp_path / "patients_valid.parquet"
+    sample_dataset.to_parquet(local_data)
+
+    # 1. Probar skip_split_validation
+    res_skipped = run_training_pipeline(
+        local_data_path=local_data,
+        output_dir=tmp_path / "out_skip",
+        dry_run=True,
+        skip_split_validation=True,
+    )
+    assert res_skipped["split_validation"] is None
+
+    # 2. Probar fail_on_split_validation con dataset contaminado (fuga de muestras artificial)
+    # Crear dataset donde todas las etiquetas sean 1 (fallo en distribución de target)
+    df_invalid = sample_dataset.copy()
+    df_invalid["diagnosis"] = 1
+
+    invalid_data_path = tmp_path / "patients_invalid.parquet"
+    df_invalid.to_parquet(invalid_data_path)
+
+    with pytest.raises(TrainTestSplitValidationError, match="Fallo en la validación"):
+        run_training_pipeline(
+            local_data_path=invalid_data_path,
+            output_dir=tmp_path / "out_fail",
+            dry_run=True,
+            fail_on_split_validation=True,
+        )
