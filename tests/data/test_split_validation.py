@@ -14,7 +14,7 @@ from src.data.split_validation import (
     check_dataset_sizes,
     check_feature_drift,
     check_index_leakage,
-    check_label_distribution,
+    check_label_distributio
     check_new_categories,
     check_sample_leakage,
     generate_html_report,
