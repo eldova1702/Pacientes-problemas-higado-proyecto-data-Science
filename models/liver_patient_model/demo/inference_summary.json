@@ -1,0 +1,19 @@
+{
+    "status": "success",
+    "model_path": "models/liver_patient_model/model.joblib",
+    "model_type": "logistic_regression",
+    "input_data_path": "models/liver_patient_model/demo/ejemplo_entrada_lote.csv",
+    "n_samples": 24,
+    "positive_predictions": 9,
+    "negative_predictions": 15,
+    "positive_ratio": 0.375,
+    "transformed_shape": [
+        24,
+        13
+    ],
+    "predictions_path": "models/liver_patient_model/demo/ejemplo_salida_predicciones.csv",
+    "figures": [
+        "models/liver_patient_model/demo/images/prediction_distribution.png"
+    ],
+    "report_path": "models/liver_patient_model/demo/inference_report.html"
+}
