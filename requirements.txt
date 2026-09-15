@@ -1,6 +1,15 @@
-joblib>=1.5.3
-numpy>=2.5.2
-pandas>=3.0.5
-scikit-learn>=1.9.0
-scipy>=1.18.0
-streamlit>=1.62.0
+# Dependencias de ejecucion de la demo Streamlit (Streamlit Community Cloud las instala
+# desde este archivo).
+#
+# Las versiones se fijan de forma exacta a proposito: el modelo se distribuye como un
+# pickle de scikit-learn y una version distinta a la que lo serializo puede impedir la
+# carga o alterar las predicciones en silencio. Deben coincidir con uv.lock.
+joblib==1.5.3
+matplotlib==3.11.1
+numpy==2.4.6
+pandas==3.0.5
+pandera==0.33.1
+pyarrow==25.0.1
+scikit-learn==1.9.0
+scipy==1.18.0
+streamlit==1.62.0
