@@ -16,6 +16,36 @@ Using the data science project template <https://github.com/JoseRZapata/data-sci
 - `Python` = `3.12`
 - `devcontainer` to work in `VSCode` or [GitHub Codespaces](https://github.com/features/codespaces) using the same environment as in production.
 
+## 🩺 Demo funcional en Streamlit
+
+La aplicación permite usar el modelo entrenado de dos formas: **predicción individual**
+mediante un formulario y **procesamiento por lotes** a partir de un archivo con muchos
+pacientes, con visualización y descarga de los resultados.
+
+<!-- Pegue aquí la URL de Streamlit Community Cloud tras el despliegue -->
+**Aplicación publicada:** _(pendiente de despliegue)_
+
+Ejecución local desde la raíz del repositorio:
+
+```bash
+uv run streamlit run app.py
+```
+
+Las instrucciones de uso, el formato del archivo por lotes, los archivos de ejemplo, la
+evidencia de funcionamiento y los pasos de despliegue están en
+[`models/liver_patient_model/demo/README.md`](models/liver_patient_model/demo/README.md).
+
+Estructura de la demo:
+
+| Ruta | Contenido |
+| --- | --- |
+| `app.py` | Interfaz Streamlit (sólo presentación) |
+| `src/inference/app_service.py` | Carga del modelo, lectura defensiva de archivos y predicción |
+| `src/inference/batch_validation.py` | Validación clínica del lote, derivada del esquema Pandera del proyecto |
+| `src/inference/demo_assets.py` | Generador reproducible de los ejemplos y la evidencia |
+| `models/liver_patient_model/demo/` | Plantilla, ejemplos de entrada y salida, y evidencia |
+| `.streamlit/config.toml` | Configuración del servidor para el despliegue |
+
 ## ✨ Features and Tools
 
 Information about all the features and tools used in this project: <https://joserzapata.github.io/data-science-project-template/#features-and-tools>
