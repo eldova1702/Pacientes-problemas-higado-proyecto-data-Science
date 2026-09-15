@@ -1,0 +1,21 @@
+# Configuracion del despliegue de la demo Streamlit.
+# Ejecucion local con trazas completas para depurar:
+#   uv run streamlit run app.py --client.showErrorDetails=full
+
+[server]
+# Limita el tamano del archivo por lotes. Streamlit rechaza los archivos mayores con su
+# propio mensaje, antes de que lleguen al codigo de la aplicacion.
+maxUploadSize = 5
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# El usuario final nunca debe ver un traceback con rutas del servidor.
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#2563eb"

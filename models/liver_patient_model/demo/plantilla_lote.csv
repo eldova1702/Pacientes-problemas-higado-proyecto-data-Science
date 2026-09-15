@@ -1,0 +1,3 @@
+﻿age,gender,total_bilirubin,direct_bilirubin,alkaline_phosphotase,alamine_aminotransferase,aspartate_aminotransferase,total_protiens,albumin,albumin_and_globulin_ratio
+45.0,Male,1.0,0.3,210.0,36.0,42.0,6.5,3.1,0.9
+58.0,Female,3.9,2.0,480.0,120.0,190.0,5.9,2.4,0.6

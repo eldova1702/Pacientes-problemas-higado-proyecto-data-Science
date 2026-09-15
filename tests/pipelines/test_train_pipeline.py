@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import src.pipelines.training_pipeline.train_pipeline as train_pipeline_module
 from src.data.split_validation import TrainTestSplitValidationError
 from src.model.model_validation import ModelValidationError
 from src.pipelines.training_pipeline.train_pipeline import (
@@ -32,6 +33,21 @@ from src.pipelines.training_pipeline.train_pipeline import (
 
 MIN_EXPECTED_DIAGNOSTIC_PLOTS: int = 2
 EXPECTED_CV_FOLDS: int = 3
+
+
+@pytest.fixture(autouse=True)
+def isolate_main_model(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Impide que las pruebas sobrescriban el modelo de producción versionado.
+
+    `save_model_artifacts` sincroniza siempre una copia en
+    `PROJECT_ROOT/models/modelo_final.joblib`, y lo hace ignorando el `output_dir` recibido.
+    Como `run_training_pipeline` la invoca con `sync_with_main_model=True` de forma
+    incondicional (incluso en modo `--dry-run`), cualquier prueba que entrene un modelo
+    reemplazaba el artefacto real del repositorio por uno entrenado con los datos sintéticos
+    de la suite. Redirigir `PROJECT_ROOT` a un directorio temporal mantiene intacta esa
+    evidencia versionada sin alterar el comportamiento que se está probando.
+    """
+    monkeypatch.setattr(train_pipeline_module, "PROJECT_ROOT", tmp_path)
 
 
 @pytest.fixture
